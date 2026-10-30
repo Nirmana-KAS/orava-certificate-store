@@ -69,9 +69,9 @@ Each page in each viewport is checked for: no horizontal overflow, nothing hidde
 | Tables / lists | TanStack Table + TanStack Query | Fast sort/filter/paginate |
 | Diagrams | **React Flow (@xyflow/react)** | Interactive live System Map and attack map |
 | Charts | Recharts | Dashboard KPIs, timelines |
-| Database | **Supabase Postgres (free)** | 500 MB DB, full-text search, Realtime, Row Level Security |
+| Database | **Supabase Postgres (free)**, reached from the server with the `postgres` driver | 500 MB DB, full-text search, Row Level Security (deny-all) |
 | File storage | **Supabase Storage (private bucket)** | 1 GB, signed URLs that expire |
-| Auth / sessions | Custom: allowlist + shared passkey (argon2 hash) + signed httpOnly cookie (`jose`) + sessions table | Fits "email + common passkey"; revocable |
+| Auth / sessions | Custom: allowlist + shared passkey (Argon2id) + random session token in an httpOnly `__Host-` cookie, hashed in a sessions table | Fits "email + common passkey"; instantly revocable |
 | Admin 2FA | TOTP (`otplib`, any authenticator app) | Free, strong |
 | PDF text | `unpdf` / `pdfjs-dist` | Reads text layer of digital PDFs |
 | OCR (scans) | **Tesseract.js, runs in the admin's browser** | Free, private (file never leaves your control), no server time limits |

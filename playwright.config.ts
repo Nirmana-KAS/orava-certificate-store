@@ -1,6 +1,8 @@
 import { defineConfig, devices, type Project } from "@playwright/test";
 
-const PORT = Number(process.env.E2E_PORT ?? 3100);
+import { appEnv, E2E } from "./tests/e2e/fixtures";
+
+const PORT = E2E.appPort;
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 /**
@@ -23,48 +25,87 @@ export const viewports = [
   { name: "phone-390-landscape", width: 844, height: 390, mobile: true },
 ] as const;
 
+const launchOptions = process.env.PW_CHROMIUM_PATH
+  ? { executablePath: process.env.PW_CHROMIUM_PATH }
+  : undefined;
+
+/** Signs in once as staff and as admin; the saved sessions are reused by page checks. */
+const setupProject: Project = {
+  name: "setup",
+  testMatch: /auth\.setup\.ts/,
+  use: { ...devices["Desktop Chrome"], launchOptions },
+};
+
 export const chromiumProjects: Project[] = viewports.map((v) => ({
   name: `chromium-${v.name}`,
+  testMatch: /responsive\.spec\.ts/,
+  dependencies: ["setup"],
   use: {
     ...devices["Desktop Chrome"],
     viewport: { width: v.width, height: v.height },
     isMobile: v.mobile,
     hasTouch: v.mobile,
-    launchOptions: process.env.PW_CHROMIUM_PATH
-      ? { executablePath: process.env.PW_CHROMIUM_PATH }
-      : undefined,
+    launchOptions,
   },
 }));
 
+/** Sign-in flows, including ones that sign everyone out, so they run after the page checks. */
+const flowProject: Project = {
+  name: "auth-flows",
+  testMatch: /auth\.spec\.ts/,
+  dependencies: chromiumProjects.map((p) => p.name!),
+  use: { ...devices["Pixel 7"], launchOptions },
+};
+
 // Safari (WebKit, used by every iPhone) and Firefox on key sizes: `pnpm test:e2e:all`.
+const other = (name: string, use: Project["use"]): Project => ({
+  name,
+  testMatch: /responsive\.spec\.ts/,
+  dependencies: ["setup"],
+  use,
+});
 export const otherBrowserProjects: Project[] = [
-  { name: "webkit-iphone", use: { ...devices["iPhone 15"] } },
-  { name: "webkit-ipad", use: { ...devices["iPad (gen 7)"] } },
-  { name: "webkit-desktop", use: { ...devices["Desktop Safari"] } },
-  {
-    name: "firefox-phone-360",
-    use: { ...devices["Desktop Firefox"], viewport: { width: 360, height: 640 } },
-  },
-  { name: "firefox-desktop", use: { ...devices["Desktop Firefox"] } },
+  other("webkit-iphone", { ...devices["iPhone 15"] }),
+  other("webkit-ipad", { ...devices["iPad (gen 7)"] }),
+  other("webkit-desktop", { ...devices["Desktop Safari"] }),
+  other("firefox-phone-360", {
+    ...devices["Desktop Firefox"],
+    viewport: { width: 360, height: 640 },
+  }),
+  other("firefox-desktop", { ...devices["Desktop Firefox"] }),
 ];
+
+export const baseProjects = [setupProject, flowProject];
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : "50%",
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL,
     trace: "retain-on-failure",
   },
-  projects: chromiumProjects,
+  projects: [...baseProjects, ...chromiumProjects],
+  // Local Postgres (PGlite) with test accounts, then the production build of the app.
+  // Run `pnpm build` first.
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : {
-        command: `pnpm start --port ${PORT}`,
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
-      },
+    : [
+        {
+          command: "node tests/e2e/db-server.ts",
+          port: E2E.dbPort,
+          reuseExistingServer: false,
+          timeout: 60_000,
+        },
+        {
+          command: `pnpm start --port ${PORT}`,
+          url: baseURL,
+          reuseExistingServer: false,
+          timeout: 120_000,
+          env: appEnv,
+        },
+      ],
 });

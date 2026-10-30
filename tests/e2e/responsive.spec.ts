@@ -1,15 +1,20 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { publicPages } from "./pages";
+import { pages, storageFor } from "./pages";
 
 const MIN_TARGET = 44;
 
-for (const page of publicPages) {
+for (const page of pages) {
   test.describe(`${page.name} (${page.path})`, () => {
+    test.use({ storageState: storageFor(page.as) ?? { cookies: [], origins: [] } });
+
     test.beforeEach(async ({ page: p }) => {
-      await p.goto(page.path);
+      const response = await p.goto(page.path);
       await p.waitForLoadState("networkidle");
+      // Make sure we are checking the intended page, not a sign-in redirect
+      expect(new URL(p.url()).pathname).toBe(page.path);
+      expect(response?.status()).toBe(page.name === "not-found" ? 404 : 200);
     });
 
     test("has no horizontal scrolling", async ({ page: p }) => {
@@ -46,7 +51,12 @@ for (const page of publicPages) {
             if (el.classList.contains("sr-only")) return false;
             // Links inside running text are exempt (WCAG 2.5.8 inline exception)
             if (el.tagName === "A" && el.closest("p, li")) return false;
-            const r = el.getBoundingClientRect();
+            // A checkbox or radio inside its label is tapped through the whole label
+            const target =
+              el instanceof HTMLInputElement && ["checkbox", "radio"].includes(el.type)
+                ? (el.closest("label") ?? el)
+                : el;
+            const r = target.getBoundingClientRect();
             return r.width > 0 && (r.width < min || r.height < min);
           })
           .map((el) => {

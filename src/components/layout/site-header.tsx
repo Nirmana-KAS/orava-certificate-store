@@ -1,14 +1,20 @@
+import { LogOut } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { SubmitButton } from "@/components/forms/submit-button";
+import { signOutAction } from "@/lib/auth/actions";
+import { getSession, homeFor } from "@/lib/server/session";
 import { site } from "@/lib/site";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const session = await getSession();
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <Link
-          href="/"
+          href={session ? homeFor(session.user.role) : "/"}
           className="flex min-h-11 min-w-0 items-center gap-3 rounded-md"
           aria-label={`${site.name} home`}
         >
@@ -24,6 +30,23 @@ export function SiteHeader() {
             Certificate Store
           </span>
         </Link>
+
+        {session ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="hidden max-w-56 truncate text-sm text-muted-foreground md:inline"
+              title={session.user.email}
+            >
+              {session.user.email}
+            </span>
+            <form action={signOutAction}>
+              <SubmitButton variant="ghost" size="sm" aria-label="Sign out">
+                <LogOut aria-hidden="true" />
+                <span className="hidden sm:inline">Sign out</span>
+              </SubmitButton>
+            </form>
+          </div>
+        ) : null}
       </div>
     </header>
   );

@@ -19,7 +19,7 @@ const buttonVariants = cva(
       // Every size keeps a 44px minimum touch target
       size: {
         default: "min-h-11 px-4 py-2",
-        sm: "min-h-11 px-3",
+        sm: "min-h-11 min-w-11 px-3",
         lg: "min-h-12 px-6 text-base",
         icon: "size-11",
       },

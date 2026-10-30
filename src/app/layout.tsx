@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 
@@ -42,7 +43,9 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Reading headers renders every page per request, so each gets its own CSP nonce (see proxy.ts)
+  await headers();
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} h-full bg-white`}>
       <body className="flex min-h-full flex-col bg-white">

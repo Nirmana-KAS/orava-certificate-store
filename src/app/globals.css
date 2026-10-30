@@ -96,6 +96,13 @@
     font-size: max(16px, 1rem);
   }
 
+  /* Keep the page footer clear of the admin's bottom tab bar on phones and tablets */
+  @media (width < 64rem) {
+    body:has([data-tabbar]) {
+      padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+    }
+  }
+
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
   }

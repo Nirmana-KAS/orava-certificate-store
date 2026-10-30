@@ -18,4 +18,7 @@ Read `PLAN.md` for the full plan. Read `AGENTS.md` for Next.js 16 notes (APIs di
 - Next.js 16 App Router, `src/` layout, `@/*` alias. Request interception lives in `src/proxy.ts` (not middleware).
 - UI components in `src/components/ui` follow shadcn/ui style (`cn()`, `cva`). The shadcn registry may be unreachable from some sandboxes; write components by hand in the same style.
 - TypeScript 7 for `pnpm typecheck`; `typescript` resolves to the TS 6 API package for ESLint/Next.
+- Database: `src/lib/server/db.ts` (porsager `postgres`, tagged templates only, server only). Schema changes go in a new `supabase/migrations/NNNN_name.sql`; never edit an applied one. Enable RLS on every new table.
+- Server actions validate with zod, call `requireAdmin()`/`requireUser()` first, and write an `audit()` entry.
+- E2E uses PGlite over a socket; keep `DATABASE_POOL_MAX=1` there (PGlite interleaves statements across connections).
 - Before finishing: `pnpm check`, `pnpm build`, `pnpm test:e2e`.
