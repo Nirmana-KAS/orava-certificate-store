@@ -1,0 +1,60 @@
+# ── Dependencies ─────────────────────────────
+/node_modules
+/.pnp
+.pnp.*
+.pnpm-store/
+
+# ── Next.js / build output ───────────────────
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Tests ────────────────────────────────────
+/coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# ── Environment & secrets (never commit) ─────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Deploy tooling ───────────────────────────
+.vercel
+.wrangler/
+.open-next/
+
+# ── Supabase local ───────────────────────────
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# ── Local certificate samples (sensitive) ────
+# Keep real certificates out of git. Put local test files here.
+/samples/
+/private/
+
+# ── Logs ─────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── OS / editor ──────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

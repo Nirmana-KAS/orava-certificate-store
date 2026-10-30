@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Orava brand tokens. The app is always light: white background on every page. */
+:root {
+  --radius: 0.625rem;
+
+  --background: #ffffff;
+  --foreground: #1c1c1f;
+
+  --card: #ffffff;
+  --card-foreground: #1c1c1f;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1f;
+
+  /* Logo blue #3a75b1 (4.8:1 on white, passes WCAG AA for text and buttons) */
+  --primary: #3a75b1;
+  --primary-hover: #2f6399;
+  --primary-foreground: #ffffff;
+
+  /* Logo grey #969293, used for decoration only (too light for body text) */
+  --brand-grey: #969293;
+
+  --secondary: #f3f6fa;
+  --secondary-foreground: #1f3f61;
+  --muted: #f5f5f6;
+  --muted-foreground: #5b5b62;
+  --accent: #eef4fb;
+  --accent-foreground: #1f3f61;
+
+  --success: #1d7a46;
+  --warning: #9a5b00;
+  --destructive: #c62828;
+  --destructive-foreground: #ffffff;
+
+  --border: #e3e5ea;
+  --input: #d4d7de;
+  --ring: #3a75b1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-brand-grey: var(--brand-grey);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    /* Never allow sideways scrolling on any device */
+    overflow-x: clip;
+  }
+
+  /* 16px minimum stops iOS Safari zooming in when a field is focused */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

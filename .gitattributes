@@ -1,0 +1,39 @@
+# Normalise line endings: LF in the repo, whatever the OS (Windows-friendly)
+* text=auto eol=lf
+
+# Windows scripts keep CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Source and config
+*.ts   text diff=javascript
+*.tsx  text diff=javascript
+*.js   text diff=javascript
+*.mjs  text diff=javascript
+*.cjs  text diff=javascript
+*.json text
+*.css  text diff=css
+*.md   text diff=markdown
+*.sql  text
+*.yml  text
+*.yaml text
+*.svg  text
+
+# Binary files: never touch line endings or diff them
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.avif binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.zip  binary
+
+# Lockfile: treat as generated, collapse in GitHub diffs
+pnpm-lock.yaml linguist-generated=true -diff merge=binary
