@@ -161,6 +161,12 @@ Key security rule: **the browser never gets database or storage credentials.** A
 | `security_events` | kind, severity, ip, email, path, country, detail, at |
 | `ip_blocks` | ip/cidr, reason, expires_at, created_by |
 | `health_checks` | component, status (ok/degraded/down), latency_ms, sample (redacted), detail, at |
+| `system_switches` | section (or `all`), state (`on`/`readonly`/`hold`/`down`), message, until_at, reason, changed_by, changed_at |
+| `switch_scopes` | id, switch_id, scope (`user`/`group`/`type`), target_id: the group/type switches (§5.7 #10) |
+| `switch_schedules` | id, section, state, message, starts_at, ends_at, repeat (none/daily/weekly), timezone, active |
+| `switch_presets` | id, name, states (jsonb) |
+| `user_groups` | id, name; plus `user_group_members` (group_id, user_id) |
+| `control_access` | control_passkey_hash, failed_count, locked_until, rescue_token_hash, rescue_expires_at, auto_protect (jsonb) |
 | `incidents` | component, severity, title, opened_at, resolved_at, **diagnosis_report (jsonb)** |
 
 Row Level Security is **enabled with deny-all** on every table, so even a leaked anon key reads nothing. Only the server (service role) can access data.
@@ -279,6 +285,46 @@ Shown the same way as the System Map: a live view with severity colours, a feed,
 
 **Not possible free (stated plainly):** network-level intrusion detection (no raw traffic access on Vercel), an enterprise WAF with managed rule sets, stopping very large volumetric DDoS beyond what Vercel absorbs, a full SIEM, penetration testing as a service. What we build is strong **application-level** monitoring and defense, which is the right fit for this app.
 
+### 5.7 Control Center page (manual kill switches) — approved 2026-10-31
+A separate admin page for switching the whole system, or one part of it, off and on by hand. It complements the System Map (§5.5): the map *watches* health on its own, the Control Center lets the admin *act*. Both use the same map design.
+
+**Access**
+- Only the admin. Opening the page needs a **second passkey** (the "Control passkey"), separate from the admin password, the TOTP code and the staff passkey. It is set on first visit and stored as an Argon2id hash.
+- A correct Control passkey unlocks the page for **10 minutes** (step-up session). Wrong tries count toward lockout and raise a `security_events` alert.
+- **The admin dashboard is never switched off**, so the admin can always undo a switch. Admin routes skip the switch check entirely.
+
+**The map**
+- A React Flow diagram. In the middle is the big round **System Down / Hold** button for the whole staff side.
+- Around it are the sections, joined by lines that show how they depend on each other: **Sign-in (Authentication)**, **Database**, **File storage**, **Search**, **Certificate view**, **Downloads**, **Uploads**, **Email**, **Extraction/OCR**, **Health checks**, **Public pages**.
+- Each section node has its own buttons, and each line can be cut on its own. For example: hold the Database but keep Sign-in on, hold Sign-in but keep the rest, or both.
+- Colours with icon + text (never colour alone): green **On**, blue **Read-only**, amber **Hold**, red **Down**, grey **Affected** (on, but blocked because a section it depends on is off; e.g. Database down → Search, View and Downloads shown as affected).
+- Works on phones: the map becomes a vertical list of the same sections with the same buttons (§1b).
+
+**Approved features (all 10, all free)**
+| # | Feature | What it does |
+|---|---|---|
+| 1 | **Hold vs Down** | *Hold*: users see a friendly "temporarily on hold, back soon" page; nothing is lost and sessions stay. *Down*: the section is fully off, its requests are refused, and for Sign-in all staff sessions are ended. |
+| 2 | **Message + timer** | Write the message users see. Set an automatic "back on at" time; the switch turns itself back on when the time passes (checked on each request, so no extra service is needed). |
+| 3 | **Confirm big actions** | The full-system switch and any *Down* need the Control passkey again plus typing the word `CONFIRM`. A 5-second "undo" toast follows every switch. |
+| 4 | **Change log** | Every switch saves who, when, which section, old → new state, the reason (required field) and the IP, in `audit_logs`; shown as a timeline on the page and downloadable as CSV. |
+| 5 | **Email alerts** | An email to the admin address on every change, and when a timer or schedule turns something back on. |
+| 6 | **Emergency switch-on link** | A "Send rescue link" button (also sent automatically after 3 wrong Control passkey tries in a row) emails a signed, single-use link valid for 15 minutes. Opening it, after admin sign-in, turns **everything back on** and asks to set a new Control passkey. |
+| 7 | **Read-only mode** | Staff can still sign in, search and view, but downloads (and admin uploads, if chosen) are off. Can be set for the whole system or per section. |
+| 8 | **Schedules** | Per-section maintenance windows, one-off or repeating (e.g. "hold Uploads every night 00:00–02:00 Asia/Colombo"). Evaluated on each request; an upcoming-window banner is shown to staff 15 minutes before. |
+| 9 | **Auto-protect** | Optional (off by default, admin chooses): when the Security Monitor (§5.6) sees a large attack, e.g. a brute-force spike, the system automatically puts **Sign-in on Hold** for a set time, emails the admin, and logs it. Built in Phase 7 with the detections. |
+| 10 | **Group / type switches** | Hold or turn off access for **selected users**, a **user group**, or **one certificate type**, without stopping everyone. Uses the same states and timers. |
+
+**Extra features added with this page**
+- **Presets**: one-click saved setups such as "Maintenance" (Uploads + Extraction on Hold), "Read-only day", "Lock everything".
+- **Status preview**: "View as staff" shows exactly what a staff user sees right now.
+- **Live sync**: if the admin has the page open on two devices, both update instantly (Supabase Realtime).
+- **Public status note**: the sign-in page shows the current hold message, so staff know before they try to sign in.
+
+**How it works (honest scope)**
+- Switch states are rows in the database. `proxy.ts` and server actions check them on every staff request, with a short in-memory cache (about 10 seconds) so the check is fast. Admin routes are exempt.
+- "Database down" means **the app stops using the database for staff features**. It does not pause the Supabase project itself (that can only be done in Supabase). If the database is genuinely unreachable, the switch state falls back to the last cached value, and the admin pages still load and show a clear error.
+- Switching sections off cannot stop Vercel itself. A full outage of Vercel or Supabase is outside the app's control.
+
 ---
 
 ## 6. Optional AI (off by default)
@@ -305,10 +351,10 @@ orava-certificate-store/
 ├─ app/
 │  ├─ (auth)/login, admin-login
 │  ├─ (app)/certificates, certificates/[id]
-│  ├─ admin/ overview, users, certificates, types, upload, audit, system-map, security, settings
+│  ├─ admin/ overview, users, certificates, types, upload, audit, system-map, control-center, security, settings
 │  └─ api/ auth, certificates, files, health, diagnose, security, backup
-├─ components/ (ui/, certificates/, admin/, system-map/, security/)
-├─ lib/ (auth, db, storage, extraction/, health/, security/, email)
+├─ components/ (ui/, certificates/, admin/, system-map/, control-center/, security/)
+├─ lib/ (auth, db, storage, extraction/, health/, switches/, security/, email)
 ├─ supabase/migrations/ (SQL schema, RLS, seed of 5 types)
 ├─ tests/ (unit, e2e)
 ├─ .github/ (dependabot.yml, workflows/)
@@ -329,7 +375,8 @@ orava-certificate-store/
 | 4 | Search, filters, sort, detail, preview, downloads (PDF/image/zip), watermark, audit logging | Users find and download in seconds |
 | 5 | Admin dashboard: overview, users, certificates, audit, settings, backup | Full admin control |
 | 6 | System Map: health probes, React Flow map, Realtime, incidents, email alerts, Diagnose & Fix + reports | Break something on purpose, watch it go red, get email, fix it |
-| 7 | Security Monitor: detections, defenses, page, actions, alerts | Simulated brute force gets detected and blocked |
+| 6b | Control Center (§5.7): Control passkey, switch map with system and section buttons, Hold/Down/Read-only, messages and timers, confirm + undo, change log, email alerts, rescue link, schedules, group/type switches, presets, staff preview | Hold the Database from the map, see staff get the hold page while the admin dashboard keeps working, then switch it back on |
+| 7 | Security Monitor: detections, defenses, page, actions, alerts | Simulated brute force gets detected and blocked; with Auto-protect on, Sign-in goes on Hold by itself (§5.7 #9) |
 | 8 | Hardening: full responsive matrix review, accessibility audit, performance, docs | Ready for daily use |
 
 The responsive test matrix (§1b) is set up in Phase 0 and runs from the first page onward, so every component is checked on phone sizes as it is built.
@@ -371,6 +418,7 @@ Use **Sonnet** for routine building and **Opus** where a mistake would be costly
 | 4 Search, filters, preview, downloads | Sonnet | UI and queries (use Opus only for search ranking tuning if needed) |
 | 5 Admin dashboard | Sonnet | Mostly UI pages |
 | 6 System Map, alerts, Diagnose & Fix | **Opus** | Health checks, failure detection and safe auto-fix logic |
+| 6b Control Center (kill switches) | **Opus** | It can lock everyone out: the switch checks, admin exemption and rescue link must be exactly right |
 | 7 Security Monitor | **Opus** | Attack detection and defenses |
 | 8 Hardening | Sonnet, then **Opus** | Sonnet for tests, docs and responsive fixes; Opus for one final security review |
 
