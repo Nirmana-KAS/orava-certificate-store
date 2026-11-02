@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "test:e2e:all": "playwright test --config playwright.all.config.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test",
-    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.ts"
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.ts",
+    "db:check": "node --env-file-if-exists=.env.local scripts/db-check.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "2.2.2",

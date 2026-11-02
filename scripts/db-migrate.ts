@@ -12,6 +12,7 @@ export async function migrate(
   const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
   const sql = postgres(url, {
     max: 1,
+    max_pipeline: 1,
     ssl: local ? false : "require",
     prepare: false,
     onnotice: () => {},

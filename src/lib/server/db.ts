@@ -12,8 +12,13 @@ function connect(): Sql {
   const url = env().DATABASE_URL;
   const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
   return postgres(url, {
-    // Supabase pooler (transaction mode) friendly; few connections per serverless instance
-    max: Number(process.env.DATABASE_POOL_MAX) || (local ? 5 : 3),
+    // One connection per server instance; queries queue on it (each takes ~10-200 ms).
+    max: Number(process.env.DATABASE_POOL_MAX) || (local ? 5 : 1),
+    // Send one query at a time. Several queries pipelined on one connection stall for minutes
+    // behind the Supabase transaction pooler.
+    max_pipeline: 1,
+    // Fail with an error instead of waiting forever for a free connection.
+    queue_timeout: 30,
     idle_timeout: 20,
     connect_timeout: 10,
     ssl: local ? false : "require",
