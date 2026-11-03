@@ -154,7 +154,7 @@ Key security rule: **the browser never gets database or storage credentials.** A
 | `app_settings` | passkey_hash, passkey_rotated_at, session_hours, lockdown_mode, alert_email, ai_enabled |
 | `admin_credentials` | user_id, password_hash, totp_secret (encrypted), recovery_codes_hash |
 | `sessions` | id (jti), user_id, ip, user_agent, country, created_at, expires_at, revoked_at |
-| `certificate_types` | id, name, slug, icon, color, description, **fields (jsonb schema)**, **extraction_rules (jsonb)**, **summary_template**, expiry_warning_days, active, sort_order |
+| `certificate_types` | id, name, slug, icon, color, description, **fields (jsonb schema)**, **extraction_rules (jsonb)**, **summary_template**, lab, **fingerprints (text[])**, **core_roles (jsonb)**, expiry_tracking, expiry_warning_days, sample_file_path, version, active (archived = false), sort_order |
 | `certificates` | id, type_id, title, cert_number, holder_name, issuer, issue_date, expiry_date, status (computed: valid/expiring/expired), **data (jsonb, type-specific fields)**, key_points (text[]), summary, ocr_text, tags, search (tsvector), created_by, timestamps, deleted_at (soft delete) |
 | `certificate_files` | id, certificate_id, kind (`pdf`/`image`), storage_path, mime, size, sha256 (duplicate check), pages, thumbnail_path |
 | `audit_logs` | actor, action (login, view, download, upload, edit, delete, settings…), target, ip, user_agent, meta, at |
@@ -172,8 +172,8 @@ Key security rule: **the browser never gets database or storage credentials.** A
 Row Level Security is **enabled with deny-all** on every table, so even a leaked anon key reads nothing. Only the server (service role) can access data.
 
 **Configurable types:** each `certificate_types.fields` entry looks like
-`{ key: "standard", label: "Standard", type: "text|date|number|select", required: true, showInList: true, filterable: true }`
-and `extraction_rules` holds hints such as anchor words ("Certificate No", "Valid until"), regex, and date formats. The upload form, filters, list columns and summary are all generated from this config, so a 6th type needs **no code**.
+`{ key: "report_no", label: "Report No", type: "text|long_text|number|carat|date|select|multi_select|table", required: true, showInList: true, filterable: true, role: "report_number" }` (a `table` field also has `columns: [...]`)
+and `extraction_rules` holds hints such as label words ("Report No", "Date of Issue"), value pattern presets or regex, and clean-up rules. See §5.2a for the 4 sample types and the admin wizard. The upload form, filters, list columns and summary are all generated from this config, so a 6th type needs **no code**.
 
 ---
 
@@ -204,6 +204,37 @@ Legend: ✅ fully free · ⚠️ free but scaled down · ❌ not realistic free
 | Edit, replace file, soft delete, restore | ✅ | |
 | Bulk upload | ⚠️ | Supported, but OCR runs one file at a time in the browser |
 | Server-side virus scanning | ❌ | No free option that keeps files private (VirusTotal shares uploads). Risk is low since only the admin uploads; we do strict type checks instead |
+
+### 5.2a Certificate types: your samples, and adding new types without code (added 2026-11-03)
+
+**What the 4 samples are.** All 4 are gemstone lab reports, scanned on a Canon scanner at 300 dpi (A4, one page). The PDFs are only an image of the scan: their built-in text layer is unreliable (garbage on the two "Full" ones), so the app always runs its own OCR and never trusts the scanner's text.
+
+| # | Type (proposed name) | Layout | Key fields to extract |
+|---|---|---|---|
+| 1 | **AIGS Gemstone Identification Report** (Full) | Folded booklet scanned sideways (needs 90° auto-rotate). Two halves: logo, QR "Verify with AIGS App", hologram, 2 gemologist signatures; then "Label : value" lines, comments, "Instruments Used" tick boxes, barcode. | Report No (e.g. GF26070746), Date, Weight (ct), Shape, Cut, Measurements (mm), Color, Origin, Identification (e.g. Natural Ruby), Comments (e.g. "No indication of heat treatment: NTE"), Instruments used (multi-select) |
+| 2 | **AIGS Analysis Short Report** (Normal) | Portrait letterhead, title "ANALYSIS SHORT REPORT: Identification Check", clean 2-column table. Unsigned, no photo. Easiest to OCR. | Report No (GLI26062280), Customer, Reference, Date of Submission, Description, Total weight (cts), Shape and cut, Quantity (pieces), Identification, Date of Issue |
+| 3 | **Bellerophon Gemmological Report** (Full) | Folded booklet scanned sideways (needs auto-rotate). Dotted-leader "Label ........ value" list, 2 signatures, stone photo, colour/clarity scales, QR. | Report No (B77215), Date, Description, Weight (ct), Measurements, Cut & Shape, Identification (e.g. Natural EMERALD), Color, Color Distribution, Color Stability, Clarity, Fluorescence, Comment, Provenance (origin), Age |
+| 4 | **Bellerophon Gemmological Testing Results** (Normal, batch) | Portrait letterhead; header (date, gemstone count, Reference N° C01092), then a **table of several rows**, then methods + legal text. | Reference No, Date, Total gemstones; per row: Item No, Carat, Identification, Comment (treatment), Pieces; Tested for, Methods |
+
+**What this means for the design**
+- Types are really *lab + report kind*. Each type gets a `lab` value (AIGS, Bellerophon…) so staff can filter by lab across types.
+- Gem reports have **no expiry date**, so expiry tracking becomes optional per type (off for these 4).
+- Type 4 has a repeating table, so fields need a **"table" field kind** (a list of rows with their own columns), not only single values.
+- Common search/sort across all types works through **core roles**: each type maps one of its fields to Report number, Report date, Customer, Gem/identification and Total weight. Type-specific fields stay in `certificates.data` (jsonb) and stay searchable.
+- **Auto-detect type on upload**: each type stores a few "fingerprint" phrases (e.g. "ANALYSIS SHORT REPORT", "Gemmological Testing Results"). After OCR, the app suggests the best matching type; the admin can change it.
+- 5th type: still waiting for your sample.
+
+**How the admin adds a new type later (no code, no deploy)** — Admin → Certificate types → *New type*, a 4-step mobile-friendly wizard:
+1. **Basics:** name, lab/issuer, short description, icon and colour, expiry tracking on/off (+ warning days).
+2. **Fields:** add rows: label, kind (`text`, `long text`, `number`, `carat`, `date`, `select`, `multi-select`, `table`), required, show in list, filterable, core role (optional). Drag to reorder.
+3. **Extraction hints (per field, all optional):** label words to look for (e.g. "Report No", "REPORT No."), value pattern (pick from presets like *report number*, *date*, *carat*, *mm size*, or a custom regex), and clean-up (trim, uppercase, parse date, number). Plus the type's fingerprint phrases and a summary template such as `{identification}, {weight} ct, {origin}. Report {report_no} dated {date}.`
+4. **Test with a sample (optional but recommended):** upload one PDF/image; the app rotates, OCRs and shows each field green (found) or amber (missing), with the OCR text beside it so the admin can copy the right label words. Repeat until happy, then **Save**. The sample is kept privately as the type's reference.
+
+Safety rules: a type with certificates can't be deleted, only archived (hidden from upload). Each save keeps a version so old certificates keep their data; removing a field hides it but never deletes stored values; a field's key can't change after use. Every change is in the audit log.
+
+**Build split:** Phase 2 builds the types table, the wizard (steps 1, 2, and the hint *forms* in 3), seeds the 4 types above, and upload with manual fields. Phase 3 builds the OCR engine (auto-rotate, image clean-up, Tesseract.js), the rule matcher, type auto-detect, table-row extraction and the "Test with a sample" screen, tuned on your 4 samples.
+
+> ⚠️ **Model reminder:** Phase 3 (extraction pipeline) and the security parts of upload (file checks, private storage, signed URLs) are critical, complex work. **Switch to Opus before starting them.** The forms and CRUD in Phase 2 are fine on Sonnet 5.5.
 
 ### 5.3 Search, review, download (all permitted users)
 | Feature | Free? | Notes |
@@ -370,7 +401,9 @@ orava-certificate-store/
 |---|---|---|
 | 0 | Scaffold: Next.js, Tailwind, shadcn, lint/format, README, .gitignore, .gitattributes, .env.example | Runs locally; you commit + push; first Vercel deploy |
 | 1 | Supabase schema + RLS + auth (allowlist, passkey, admin password + TOTP, sessions) | You and a test user can sign in |
-| 2 | Certificate types (config UI, seed 5 types) + upload (direct to storage) + manual fields | Admin uploads a certificate |
+| 2a *(done 2026-11-03, v0.3.0)* | Certificate types: tables, 4 sample types added, 4-step wizard (create/edit/archive, versions), add/edit/delete certificates with manual fields incl. table rows, summary + key points from the type's template | Admin creates a test type in the wizard and adds a certificate |
+| 2b *(next, Opus)* | File upload: PDF/image checks, private storage, signed links, thumbnails | Admin attaches a scan to a certificate |
+| 2 (original wording) | Certificate types (wizard UI per §5.2a, seed the 4 sample types) + upload (direct to storage) + manual fields | Admin creates a test type in the wizard and uploads a certificate |
 | 3 | Extraction: PDF text, browser OCR, per-type rules, key points + summary; tuned with your samples | Auto-filled fields on your real examples |
 | 4 | Search, filters, sort, detail, preview, downloads (PDF/image/zip), watermark, audit logging | Users find and download in seconds |
 | 5 | Admin dashboard: overview, users, certificates, audit, settings, backup | Full admin control |
@@ -401,7 +434,7 @@ I will give step-by-step setup notes for each in the README. Secrets go only int
 2. **Hosting (both free):** Vercel Hobby despite the non-commercial rule, or Cloudflare free? (I recommend starting on Vercel Hobby with portable code.)
 3. **AI summaries:** keep off (private, rule-based) for now? (Recommended: yes.)
 4. **Extra sign-in step:** add email one-time code on new devices? (Recommended: yes.)
-5. **Names of the 5 certificate types** and one sample of each, when ready.
+5. **Names of the 5 certificate types** and one sample of each, when ready. *(4 received 2026-11-03, see §5.2a; 5th pending.)*
 
 ---
 
@@ -413,7 +446,7 @@ Use **Sonnet** for routine building and **Opus** where a mistake would be costly
 |---|---|---|
 | 0 Setup, branding, test matrix | Sonnet | Standard scaffolding *(already done)* |
 | 1 Database, sign-in, sessions, admin 2FA | **Opus** | Security-critical: passkey hashing, sessions, rate limits, RLS |
-| 2 Certificate types + upload | Sonnet | Forms, storage upload, CRUD |
+| 2 Certificate types + upload | Sonnet, **Opus** for upload security | Wizard forms and CRUD on Sonnet; file checks, private storage and signed URLs on Opus |
 | 3 Extraction (PDF text, OCR, rules, summary) | **Opus** | Hardest logic; accuracy matters |
 | 4 Search, filters, preview, downloads | Sonnet | UI and queries (use Opus only for search ranking tuning if needed) |
 | 5 Admin dashboard | Sonnet | Mostly UI pages |

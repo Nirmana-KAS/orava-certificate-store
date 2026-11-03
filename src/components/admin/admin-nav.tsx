@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Settings, Users } from "lucide-react";
+import { FileStack, LayoutDashboard, Settings, Shapes, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
+  { href: "/admin/certificates", label: "Certificates", icon: FileStack },
+  { href: "/admin/types", label: "Types", icon: Shapes },
   { href: "/admin/users", label: "Staff", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -46,13 +48,13 @@ export function AdminNav() {
         data-tabbar
         className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
-        <ul className="mx-auto grid max-w-md grid-cols-3">
+        <ul className="mx-auto grid max-w-md grid-cols-5">
           {items.map(({ href, label, icon: Icon }) => (
             <li key={href}>
               <Link
                 href={href}
                 aria-current={isActive(pathname, href) ? "page" : undefined}
-                className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs font-medium text-muted-foreground aria-[current=page]:text-primary"
+                className="flex min-h-14 flex-col items-center justify-center gap-1 px-0.5 text-[11px] font-medium text-muted-foreground aria-[current=page]:text-primary"
               >
                 <Icon className="size-5" aria-hidden="true" />
                 {label}

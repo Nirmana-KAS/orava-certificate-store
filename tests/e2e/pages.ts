@@ -11,6 +11,10 @@ export const pages: Page[] = [
   { name: "not-found", path: "/this-page-does-not-exist" },
   { name: "certificates", path: "/certificates", as: "staff" },
   { name: "admin-overview", path: "/admin", as: "admin" },
+  { name: "admin-certificates", path: "/admin/certificates", as: "admin" },
+  { name: "admin-add-certificate", path: "/admin/certificates/new", as: "admin" },
+  { name: "admin-types", path: "/admin/types", as: "admin" },
+  { name: "admin-new-type", path: "/admin/types/new", as: "admin" },
   { name: "admin-staff", path: "/admin/users", as: "admin" },
   { name: "admin-settings", path: "/admin/settings", as: "admin" },
 ];

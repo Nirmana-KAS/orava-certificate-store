@@ -57,6 +57,25 @@ const flowProject: Project = {
   use: { ...devices["Pixel 7"], launchOptions },
 };
 
+/** Certificate types and certificates: the wizard and forms at a phone, a tablet and a desktop size. */
+export const adminFlowProjects: Project[] = [
+  { name: "phone-320", width: 320, height: 568, mobile: true },
+  { name: "tablet-768", width: 768, height: 1024, mobile: true },
+  { name: "laptop-1280", width: 1280, height: 800, mobile: false },
+].map((v) => ({
+  name: `admin-flows-${v.name}`,
+  testMatch: /certificates\.spec\.ts/,
+  dependencies: ["setup"],
+  use: {
+    ...devices["Desktop Chrome"],
+    viewport: { width: v.width, height: v.height },
+    isMobile: v.mobile,
+    hasTouch: v.mobile,
+    launchOptions,
+    storageState: "test-results/.auth/admin.json",
+  },
+}));
+
 // Safari (WebKit, used by every iPhone) and Firefox on key sizes: `pnpm test:e2e:all`.
 const other = (name: string, use: Project["use"]): Project => ({
   name,
@@ -88,7 +107,7 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
   },
-  projects: [...baseProjects, ...chromiumProjects],
+  projects: [...baseProjects, ...chromiumProjects, ...adminFlowProjects],
   // Local Postgres (PGlite) with test accounts, then the production build of the app.
   // Run `pnpm build` first.
   webServer: process.env.E2E_BASE_URL
