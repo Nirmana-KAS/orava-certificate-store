@@ -108,7 +108,8 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [...baseProjects, ...chromiumProjects, ...adminFlowProjects],
-  // Local Postgres (PGlite) with test accounts, then the production build of the app.
+  // Local Postgres (PGlite) with test accounts, a stand-in for Supabase Storage, then the
+  // production build of the app.
   // Run `pnpm build` first.
   webServer: process.env.E2E_BASE_URL
     ? undefined
@@ -118,6 +119,12 @@ export default defineConfig({
           port: E2E.dbPort,
           reuseExistingServer: false,
           timeout: 60_000,
+        },
+        {
+          command: "node tests/e2e/storage-server.ts",
+          port: E2E.storagePort,
+          reuseExistingServer: false,
+          timeout: 30_000,
         },
         {
           command: `pnpm start --port ${PORT}`,

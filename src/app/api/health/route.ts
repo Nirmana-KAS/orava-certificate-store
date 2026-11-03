@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/server/db";
+import { getSession } from "@/lib/server/session";
+import { bucketStatus, storageConfigured } from "@/lib/server/storage";
 
-// Safe to open in a browser: it reports only yes/no for settings, never a value.
+// Anyone gets only "ok" or "error". The signed-in admin also sees the details: yes/no for each
+// setting (never a value), the region, the database host and timings, and file storage.
 export const dynamic = "force-dynamic";
 
 const REQUIRED = ["DATABASE_URL", "AUTH_SECRET", "ADMIN_EMAIL"] as const;
@@ -56,6 +59,26 @@ export async function GET() {
     checks.database = `FAILED: ${(e as Error).message}`;
   }
 
+  if (storageConfigured()) {
+    try {
+      const b = await withTimeout(bucketStatus(), 15_000);
+      checks.fileStorage = !b.exists
+        ? "ok (bucket is created on the first upload)"
+        : b.private
+          ? "ok (private bucket)"
+          : "WARNING: bucket is public; it is made private again on the next upload";
+    } catch (e) {
+      checks.fileStorage = `FAILED: ${(e as Error).message.slice(0, 200)}`;
+    }
+  } else {
+    checks.fileStorage = "not set up (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)";
+  }
+
   const ok = typeof checks.database === "string" && checks.database.startsWith("ok");
-  return NextResponse.json(checks, { status: ok ? 200 : 503 });
+  const session = await getSession().catch(() => null);
+  const body = session?.user.role === "admin" ? checks : { status: ok ? "ok" : "error" };
+  return NextResponse.json(body, {
+    status: ok ? 200 : 503,
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }

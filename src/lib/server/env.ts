@@ -9,6 +9,16 @@ const schema = z.object({
   ADMIN_SETUP_TOKEN: z.string().min(16).optional(),
   NEXT_PUBLIC_SITE_URL: z.string().optional(),
 
+  // File storage: Supabase Storage, used only from the server with the secret key
+  SUPABASE_URL: z
+    .url()
+    .refine(
+      (u) => /^https:\/\//.test(u) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(u),
+      "SUPABASE_URL must start with https://",
+    )
+    .optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+
   // Email: Gmail SMTP (sends to anyone, free) or Resend (free, sends only to your own address
   // until you verify a domain). In development with neither set, emails print to the console.
   SMTP_USER: z.string().optional(),

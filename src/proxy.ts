@@ -1,5 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+function storageOrigin(): string | null {
+  try {
+    return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : null;
+  } catch {
+    return null;
+  }
+}
+
 const SESSION_COOKIES = ["__Host-orava_session", "orava_session"];
 
 /** Pages that need a session. A missing cookie is sent to sign-in before any page code runs. */
@@ -13,6 +21,7 @@ function needsSession(pathname: string): "admin" | "staff" | null {
 function contentSecurityPolicy(nonce: string, request: NextRequest): string {
   const dev = process.env.NODE_ENV === "development";
   const https = request.nextUrl.protocol === "https:";
+  const storage = storageOrigin();
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ""}`,
@@ -20,7 +29,8 @@ function contentSecurityPolicy(nonce: string, request: NextRequest): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
-    "connect-src 'self'",
+    // The admin's browser sends uploads straight to the private storage bucket
+    `connect-src 'self'${storage ? ` ${storage}` : ""}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

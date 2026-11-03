@@ -21,13 +21,16 @@ type Row = {
   type_name: string;
   type_icon: string;
   type_color: string;
+  files: number;
 };
 
 export default async function CertificatesPage() {
   const rows = await db()<Row[]>`
     select c.id, c.title, c.report_no, to_char(c.report_date, 'DD Mon YYYY') as report_date,
       c.weight_ct::text as weight_ct, c.summary,
-      t.name as type_name, t.icon as type_icon, t.color as type_color
+      t.name as type_name, t.icon as type_icon, t.color as type_color,
+      (select count(*)::int from certificate_files f
+        where f.certificate_id = c.id and f.status = 'ready') as files
     from certificates c join certificate_types t on t.id = c.type_id
     where c.deleted_at is null
     order by c.created_at desc
@@ -38,7 +41,7 @@ export default async function CertificatesPage() {
     <>
       <PageHeader
         title="Certificates"
-        description="Add, edit and remove certificates. Searching, filtering and downloads for staff come in Phase 4."
+        description="Add certificates and their scans. Searching, filtering and downloads for staff come in Phase 4."
       />
       <div className="mb-6 flex flex-wrap gap-3">
         <Button asChild size="lg" className="w-full sm:w-auto">
@@ -76,7 +79,13 @@ export default async function CertificatesPage() {
                       </p>
                       {r.summary ? <p className="mt-1 text-sm break-words">{r.summary}</p> : null}
                       <div className="mt-2">
-                        <Badge variant="muted">No file attached yet</Badge>
+                        {r.files > 0 ? (
+                          <Badge variant="success">
+                            {r.files} file{r.files === 1 ? "" : "s"}
+                          </Badge>
+                        ) : (
+                          <Badge variant="warning">No file yet</Badge>
+                        )}
                       </div>
                     </div>
                   </div>

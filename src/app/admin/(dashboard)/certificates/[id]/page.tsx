@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { FileText, Image as ImageIcon } from "lucide-react";
+
 import { CertificateForm } from "@/components/admin/certificate-form";
+import { FileUploader } from "@/components/admin/file-uploader";
 import { PageHeader } from "@/components/admin/page-header";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Alert } from "@/components/ui/alert";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { deleteCertificateAction } from "@/lib/admin/certificate-actions";
+import { removeFileAction } from "@/lib/admin/file-actions";
+import { formatDateTime } from "@/lib/format";
+import { MAX_FILES_PER_CERTIFICATE, formatBytes } from "@/lib/files/rules";
 import { db } from "@/lib/server/db";
+import { storageConfigured } from "@/lib/server/storage";
 import { getType } from "@/lib/server/types";
 import type { EntryData } from "@/lib/types/entry";
 
@@ -41,6 +49,12 @@ export default async function EditCertificatePage({
   if (!cert) notFound();
   const type = await getType(cert.type_id);
   if (!type) notFound();
+  const files = await db()<
+    { id: string; kind: string; original_name: string; size_bytes: string; created_at: Date }[]
+  >`
+    select id, kind, original_name, size_bytes::text, created_at from certificate_files
+    where certificate_id = ${cert.id} and status = 'ready' order by created_at
+  `;
 
   return (
     <>
@@ -72,6 +86,75 @@ export default async function EditCertificatePage({
       ) : null}
 
       <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Files</CardTitle>
+          <CardDescription>
+            The scanned certificate as a PDF and/or image. Stored privately; each view is logged.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {files.length > 0 ? (
+            <ul className="grid gap-2">
+              {files.map((f) => (
+                <li
+                  key={f.id}
+                  className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    {f.kind === "pdf" ? (
+                      <FileText className="size-5 shrink-0 text-primary" aria-hidden="true" />
+                    ) : (
+                      <ImageIcon className="size-5 shrink-0 text-primary" aria-hidden="true" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{f.original_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {f.kind.toUpperCase()} · {formatBytes(Number(f.size_bytes))} ·{" "}
+                        {formatDateTime(f.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={`/api/files/${f.id}`} target="_blank" rel="noopener noreferrer">
+                        View
+                      </a>
+                    </Button>
+                    <Button asChild variant="outline" size="sm">
+                      <a href={`/api/files/${f.id}?download=1`}>Download</a>
+                    </Button>
+                    <form action={removeFileAction.bind(null, f.id)}>
+                      <SubmitButton
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        confirm={`Remove ${f.original_name}? The file is deleted from storage.`}
+                      >
+                        Remove
+                      </SubmitButton>
+                    </form>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <FileUploader
+            certId={cert.id}
+            disabledReason={
+              !storageConfigured()
+                ? "File storage isn't set up yet: add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (see README)."
+                : files.length >= MAX_FILES_PER_CERTIFICATE
+                  ? `This certificate has the most files allowed (${MAX_FILES_PER_CERTIFICATE}).`
+                  : undefined
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Details</CardTitle>
+        </CardHeader>
         <CardContent>
           <CertificateForm
             typeId={type.id}

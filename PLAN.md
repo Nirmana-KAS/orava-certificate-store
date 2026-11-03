@@ -402,7 +402,7 @@ orava-certificate-store/
 | 0 | Scaffold: Next.js, Tailwind, shadcn, lint/format, README, .gitignore, .gitattributes, .env.example | Runs locally; you commit + push; first Vercel deploy |
 | 1 | Supabase schema + RLS + auth (allowlist, passkey, admin password + TOTP, sessions) | You and a test user can sign in |
 | 2a *(done 2026-11-03, v0.3.0)* | Certificate types: tables, 4 sample types added, 4-step wizard (create/edit/archive, versions), add/edit/delete certificates with manual fields incl. table rows, summary + key points from the type's template | Admin creates a test type in the wizard and adds a certificate |
-| 2b *(next, Opus)* | File upload: PDF/image checks, private storage, signed links, thumbnails | Admin attaches a scan to a certificate |
+| 2b *(done 2026-11-03, v0.4.0, Opus)* | File upload: private bucket, direct browser upload with one-time links, server re-checks real file type, PDF scripts/attachments/encryption, size, duplicates; 60-second view/download links; audit log. Thumbnails moved to Phase 4 (preview) | Admin attaches a scan to a certificate |
 | 2 (original wording) | Certificate types (wizard UI per §5.2a, seed the 4 sample types) + upload (direct to storage) + manual fields | Admin creates a test type in the wizard and uploads a certificate |
 | 3 | Extraction: PDF text, browser OCR, per-type rules, key points + summary; tuned with your samples | Auto-filled fields on your real examples |
 | 4 | Search, filters, sort, detail, preview, downloads (PDF/image/zip), watermark, audit logging | Users find and download in seconds |

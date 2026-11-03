@@ -1,6 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { pdf, pdfWithHiddenScript, png } from "../helpers/sample-files";
+import { E2E } from "./fixtures";
+
+const appStorage = `http://127.0.0.1:${E2E.storagePort}`;
+
 // Certificate types and certificates, as the admin. Each project (screen size) works on its own
 // type name so the three runs don't collide.
 test.describe.configure({ mode: "serial" });
@@ -142,4 +147,101 @@ test("an existing type opens for editing", async ({ page }) => {
   await expect(page.getByLabel("Field 1 name")).not.toHaveValue("");
   await noSideScroll(page, "edit type, fields step");
   await noViolations(page, "edit type, fields step");
+});
+
+test("scans are checked, stored privately, viewed, downloaded and removed", async ({
+  page,
+  browser,
+}, testInfo) => {
+  const tag = testInfo.project.name;
+  await page.goto("/admin/certificates/new");
+  await page.getByRole("link", { name: /AIGS Analysis Short Report/ }).click();
+  await page.getByLabel("Report No *").fill(`F-${tag}`);
+  await page.getByLabel("Identification *").fill("Natural Sapphire");
+  await page.getByRole("button", { name: "Add certificate" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+
+  const picker = page.locator("input[type=file]");
+  const result = (name: string) => page.locator("li", { hasText: name });
+
+  // A real PDF and a real PNG are accepted
+  await picker.setInputFiles([
+    { name: `scan-${tag}.pdf`, mimeType: "application/pdf", buffer: pdf(tag) },
+    { name: `photo-${tag}.png`, mimeType: "image/png", buffer: png(tag) },
+  ]);
+  await expect(result(`scan-${tag}.pdf`).getByText("Checked and saved.")).toBeVisible();
+  await expect(result(`photo-${tag}.png`).getByText("Checked and saved.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "View", exact: true })).toHaveCount(2);
+  await noSideScroll(page, "certificate with files");
+
+  // A text file pretending to be a PDF, a PDF with a hidden script, and a duplicate are refused
+  await picker.setInputFiles([
+    {
+      name: `fake-${tag}.pdf`,
+      mimeType: "application/pdf",
+      buffer: Buffer.from(`not a pdf ${tag}`),
+    },
+    { name: `script-${tag}.pdf`, mimeType: "application/pdf", buffer: pdfWithHiddenScript(tag) },
+    { name: `again-${tag}.png`, mimeType: "image/png", buffer: png(tag) },
+    {
+      name: `page-${tag}.html`,
+      mimeType: "text/html",
+      buffer: Buffer.from("<script>alert(1)</script>"),
+    },
+  ]);
+  await expect(result(`fake-${tag}.pdf`).getByText(/is not a real PDF/)).toBeVisible();
+  await expect(result(`script-${tag}.pdf`).getByText(/contains JavaScript/)).toBeVisible();
+  await expect(result(`again-${tag}.png`).getByText(/is already attached/)).toBeVisible();
+  await expect(result(`page-${tag}.html`).getByText(/Only PDF, JPEG, PNG or WebP/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("link", { name: "View", exact: true })).toHaveCount(2);
+
+  // Refused files were deleted from storage, accepted ones are there
+  const stored = (await (
+    await page.request.get(`${appStorage}/storage/v1/__test/objects`)
+  ).json()) as string[];
+  const certId = new URL(page.url()).pathname.split("/").pop()!;
+  expect(stored.filter((k) => k.includes(certId))).toHaveLength(2);
+
+  // View goes through a short-lived signed link and returns the same bytes
+  const href = await page
+    .getByRole("link", { name: "View", exact: true })
+    .first()
+    .getAttribute("href");
+  const viewed = await page.request.get(href!, { maxRedirects: 0 });
+  expect(viewed.status()).toBe(303);
+  expect(viewed.headers()["location"]).toContain("/object/sign/certificates/");
+  expect(viewed.headers()["cache-control"]).toContain("no-store");
+  const body = await page.request.get(viewed.headers()["location"]!);
+  expect(Buffer.from(await body.body()).equals(pdf(tag))).toBe(true);
+
+  const dl = await page.request.get(`${href}?download=1`, { maxRedirects: 0 });
+  expect(dl.headers()["location"]).toContain("download=");
+
+  // Signed-out visitors (and later, anyone without permission) get nothing
+  const stranger = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const denied = await stranger.request.get(`${testInfo.project.use.baseURL ?? ""}${href}`, {
+    maxRedirects: 0,
+  });
+  expect(denied.status()).toBe(404);
+  await stranger.close();
+
+  // Remove one file
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Remove", exact: true }).first().click();
+  await expect(page.getByRole("link", { name: "View", exact: true })).toHaveCount(1);
+  await expect(page.locator("label", { hasText: "Add PDF or scan" })).toBeVisible();
+  await noViolations(page, "certificate with files");
+});
+
+test("the health page shows details only to the admin", async ({ page, browser }, testInfo) => {
+  const admin = await (await page.request.get("/api/health")).json();
+  expect(admin.database).toMatch(/^ok/);
+  expect(admin.fileStorage).toMatch(/^ok/);
+  expect(JSON.stringify(admin)).not.toContain(E2E.storageKey);
+
+  const stranger = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const res = await stranger.request.get(`${testInfo.project.use.baseURL ?? ""}/api/health`);
+  expect(await res.json()).toEqual({ status: "ok" });
+  await stranger.close();
 });

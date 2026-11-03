@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 export const E2E = {
   dbPort: 54329,
+  storagePort: 54330,
+  storageKey: "e2e-storage-secret-key-0123456789",
   appPort: Number(process.env.E2E_PORT ?? 3100),
   authSecret: "e2e-only-secret-0123456789abcdefghijklmnopqrstuvwxyz",
   setupToken: "e2e-setup-token-0123456789",
@@ -28,4 +30,6 @@ export const appEnv = {
   ADMIN_EMAIL: E2E.admin.email,
   ADMIN_SETUP_TOKEN: E2E.setupToken,
   MAIL_FILE: E2E.mailFile,
+  SUPABASE_URL: `http://127.0.0.1:${E2E.storagePort}`,
+  SUPABASE_SERVICE_ROLE_KEY: E2E.storageKey,
 };
