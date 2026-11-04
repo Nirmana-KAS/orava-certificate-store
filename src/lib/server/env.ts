@@ -13,9 +13,12 @@ const schema = z.object({
   SUPABASE_URL: z
     .url()
     .refine(
-      (u) => /^https:\/\//.test(u) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(u),
+      (u) => /^https:\/\//.test(u) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(u),
       "SUPABASE_URL must start with https://",
     )
+    // Only the project address counts: a pasted ".../rest/v1/" (the Data API URL) would send
+    // storage calls to the database API instead, which answers "Invalid path" (PGRST125)
+    .transform((u) => new URL(u).origin)
     .optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
 

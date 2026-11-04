@@ -23,7 +23,7 @@ function config() {
   const e = env();
   if (!e.SUPABASE_URL || !e.SUPABASE_SERVICE_ROLE_KEY) return null;
   return {
-    base: `${e.SUPABASE_URL.replace(/\/+$/, "")}/storage/v1`,
+    base: `${e.SUPABASE_URL}/storage/v1`,
     key: e.SUPABASE_SERVICE_ROLE_KEY,
   };
 }

@@ -47,7 +47,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Reading headers renders every page per request, so each gets its own CSP nonce (see proxy.ts)
   await headers();
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} h-full bg-white`}>
+    // Browser extensions (e.g. QuillBot, Grammarly) add attributes to <html> before React loads;
+    // this only silences that one tag, not mismatches inside the page
+    <html
+      lang="en"
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full bg-white`}
+      suppressHydrationWarning
+    >
       <body className="flex min-h-full flex-col bg-white">
         <SkipLink />
         <SiteHeader />
