@@ -1,4 +1,5 @@
 allowBuilds:
+  tesseract.js: false
   sharp: false
   unrs-resolver: false
 minimumReleaseAgeExclude:

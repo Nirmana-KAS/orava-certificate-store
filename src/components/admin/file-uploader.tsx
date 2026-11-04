@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  cancelUploadAction,
-  finishUploadAction,
-  startUploadAction,
-} from "@/lib/admin/file-actions";
-import { ACCEPT, MAX_FILE_BYTES, formatBytes, isAllowedMime } from "@/lib/files/rules";
+import { ACCEPT, MAX_FILE_BYTES, formatBytes } from "@/lib/files/rules";
+import { uploadToCertificate } from "@/lib/files/upload-client";
 
 type Item = {
   key: string;
@@ -19,21 +15,6 @@ type Item = {
   progress: number;
   message?: string;
 };
-
-/** Sends a file straight to the private storage bucket with the one-time link, showing progress. */
-function put(url: string, file: File, contentType: string, onProgress: (p: number) => void) {
-  return new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", contentType);
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(String(xhr.status)));
-    xhr.onerror = () => reject(new Error("network"));
-    xhr.send(file);
-  });
-}
 
 export function FileUploader({
   certId,
@@ -52,38 +33,13 @@ export function FileUploader({
     setItems((all) => all.map((i) => (i.key === key ? { ...i, ...change } : i)));
 
   async function send(file: File, key: string) {
-    if (!isAllowedMime(file.type)) {
-      return update(key, {
-        state: "error",
-        message: "Only PDF, JPEG, PNG or WebP files can be added.",
-      });
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      return update(key, {
-        state: "error",
-        message: `Too large (${formatBytes(file.size)}). The limit is ${formatBytes(MAX_FILE_BYTES)}.`,
-      });
-    }
-    const started = await startUploadAction(certId, {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-    });
-    if (!started.ok) return update(key, { state: "error", message: started.error });
-
-    try {
-      await put(started.uploadUrl, file, started.contentType, (p) => update(key, { progress: p }));
-    } catch {
-      await cancelUploadAction(started.fileId);
-      return update(key, {
-        state: "error",
-        message: "The upload was interrupted. Please try again.",
-      });
-    }
-
-    update(key, { state: "checking", progress: 1 });
-    const finished = await finishUploadAction(started.fileId);
-    if (!finished.ok) return update(key, { state: "error", message: finished.error });
+    const outcome = await uploadToCertificate(
+      certId,
+      file,
+      (p) => update(key, { progress: p }),
+      () => update(key, { state: "checking", progress: 1 }),
+    );
+    if (!outcome.ok) return update(key, { state: "error", message: outcome.error });
     update(key, { state: "done", message: "Checked and saved." });
   }
 

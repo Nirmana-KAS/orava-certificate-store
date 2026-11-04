@@ -13,6 +13,7 @@ export const pages: Page[] = [
   { name: "admin-overview", path: "/admin", as: "admin" },
   { name: "admin-certificates", path: "/admin/certificates", as: "admin" },
   { name: "admin-add-certificate", path: "/admin/certificates/new", as: "admin" },
+  { name: "admin-import", path: "/admin/certificates/import", as: "admin" },
   { name: "admin-types", path: "/admin/types", as: "admin" },
   { name: "admin-new-type", path: "/admin/types/new", as: "admin" },
   { name: "admin-staff", path: "/admin/users", as: "admin" },

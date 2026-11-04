@@ -41,9 +41,12 @@ export default async function EditCertificatePage({
       data: EntryData;
       summary: string;
       key_points: string[];
+      needs_review: boolean;
+      ocr_text: string;
+      extraction: { toCheck?: string[]; auto?: boolean; fileName?: string } | null;
     }[]
   >`
-    select id, type_id, title, data, summary, key_points
+    select id, type_id, title, data, summary, key_points, needs_review, ocr_text, extraction
     from certificates where id = ${id} and deleted_at is null
   `;
   if (!cert) notFound();
@@ -62,6 +65,19 @@ export default async function EditCertificatePage({
       {saved ? (
         <Alert variant="success" className="mb-6">
           Saved.
+        </Alert>
+      ) : null}
+
+      {cert.needs_review ? (
+        <Alert variant="warning" className="mb-6">
+          This certificate was read automatically. Please check{" "}
+          {(() => {
+            const labels = (cert.extraction?.toCheck ?? [])
+              .map((k) => type.fields.find((f) => f.key === k)?.label)
+              .filter(Boolean);
+            return labels.length ? <strong>{labels.join(", ")}</strong> : "its values";
+          })()}{" "}
+          below, then save. The mark goes away once you save.
         </Alert>
       ) : null}
 
@@ -164,6 +180,17 @@ export default async function EditCertificatePage({
           />
         </CardContent>
       </Card>
+
+      {cert.ocr_text ? (
+        <details className="mb-6 rounded-xl border bg-card px-4 py-3 text-sm">
+          <summary className="min-h-11 cursor-pointer content-center font-medium">
+            Text read from {cert.extraction?.fileName ?? "the file"}
+          </summary>
+          <pre className="mt-2 max-h-96 overflow-auto text-xs break-words whitespace-pre-wrap">
+            {cert.ocr_text}
+          </pre>
+        </details>
+      ) : null}
 
       <form action={deleteCertificateAction.bind(null, cert.id)}>
         <SubmitButton

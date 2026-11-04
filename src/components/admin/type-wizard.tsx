@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
+import { SampleTester } from "@/components/admin/sample-tester";
 import { TypeIcon } from "@/components/admin/type-icon";
 import { Field } from "@/components/forms/field";
 import { FormAlert } from "@/components/forms/form-alert";
@@ -32,7 +33,14 @@ import {
 } from "@/lib/types/schema";
 import { cn } from "@/lib/utils";
 
-type DraftColumn = { uid: string; key: string; label: string; kind: (typeof COLUMN_KINDS)[number] };
+type DraftColumn = {
+  uid: string;
+  key: string;
+  label: string;
+  kind: (typeof COLUMN_KINDS)[number];
+  /** Header words to look for when reading the table from a scan */
+  labels?: string[];
+};
 type DraftField = {
   uid: string;
   /** Existing fields keep their key for ever, because saved certificates are stored under it */
@@ -163,7 +171,13 @@ function toConfig(d: {
               const base = ck;
               for (let n = 2; colUsed.has(ck); n++) ck = `${base}_${n}`.slice(0, 40);
               colUsed.add(ck);
-              return { key: ck, label: c.label, kind: c.kind };
+              const labels = (c.labels ?? []).map((l) => l.trim()).filter(Boolean);
+              return {
+                key: ck,
+                label: c.label,
+                kind: c.kind,
+                ...(labels.length ? { labels } : {}),
+              };
             }),
           }
         : {}),
@@ -656,8 +670,8 @@ export function TypeWizard({
           <CardHeader>
             <CardTitle>3. Extraction hints</CardTitle>
             <CardDescription>
-              Optional. These help the app read a scanned certificate and fill the fields for you
-              (automatic reading arrives in Phase 3). You can skip this step.
+              Optional. These help the app read a scanned certificate and fill the fields for you.
+              You can skip this step, and test your hints with a sample at the bottom.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
@@ -759,6 +773,42 @@ export function TypeWizard({
                   </fieldset>
                 </div>
               ))}
+            {fields
+              .filter((f) => f.kind === "table" && f.columns.length > 0)
+              .map((f) => (
+                <div key={f.uid} className="grid gap-3 rounded-lg border p-4">
+                  <p className="font-medium">{f.label || "Unnamed table"}: column headers</p>
+                  <p className="text-sm text-muted-foreground">
+                    Words printed at the top of each column, separated by commas. The column name is
+                    always tried too.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {f.columns.map((c) => (
+                      <Field
+                        key={c.uid}
+                        label={c.label || "Unnamed column"}
+                        name={`hdr-${c.uid}`}
+                        value={(c.labels ?? []).join(", ")}
+                        placeholder="Pc(s), Pieces"
+                        onChange={(e) =>
+                          patch(f.uid, {
+                            columns: f.columns.map((x) =>
+                              x.uid === c.uid
+                                ? {
+                                    ...x,
+                                    labels: e.target.value.split(",").map((l) => l.trimStart()),
+                                  }
+                                : x,
+                            ),
+                          })
+                        }
+                        autoComplete="off"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            <SampleTester fields={config.fields as FieldDef[]} fingerprints={config.fingerprints} />
           </CardContent>
         </Card>
       ) : null}
@@ -791,10 +841,10 @@ export function TypeWizard({
                 </li>
               ))}
             </ul>
-            <Alert variant="info">
-              <strong>Test with a sample</strong> (upload a scan and see which fields are found)
-              comes with automatic reading in Phase 3.
-            </Alert>
+            <p className="text-sm text-muted-foreground">
+              Tip: go back to step 3 and use <strong>Test with a sample</strong> to see which fields
+              the app can read before you save.
+            </p>
             <SubmitButton
               size="lg"
               className="w-full sm:w-auto sm:justify-self-start"

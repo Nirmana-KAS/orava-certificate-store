@@ -67,6 +67,8 @@ const columnSchema = z.object({
   key: keySchema,
   label: z.string().trim().min(1, "Give every column a name.").max(80),
   kind: z.enum(COLUMN_KINDS),
+  /** Header words to look for when reading the table from a scan */
+  labels: z.array(z.string().trim().min(1).max(80)).max(10).optional(),
 });
 
 export const fieldSchema = z

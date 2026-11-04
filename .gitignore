@@ -58,3 +58,6 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# ── OCR engine files (copied from node_modules at dev/build) ──
+/public/ocr/

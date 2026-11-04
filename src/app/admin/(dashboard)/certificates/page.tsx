@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, ScanText } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { TypeIcon } from "@/components/admin/type-icon";
@@ -22,13 +22,14 @@ type Row = {
   type_icon: string;
   type_color: string;
   files: number;
+  needs_review: boolean;
 };
 
 export default async function CertificatesPage() {
   const rows = await db()<Row[]>`
     select c.id, c.title, c.report_no, to_char(c.report_date, 'DD Mon YYYY') as report_date,
       c.weight_ct::text as weight_ct, c.summary,
-      t.name as type_name, t.icon as type_icon, t.color as type_color,
+      t.name as type_name, t.icon as type_icon, t.color as type_color, c.needs_review,
       (select count(*)::int from certificate_files f
         where f.certificate_id = c.id and f.status = 'ready') as files
     from certificates c join certificate_types t on t.id = c.type_id
@@ -41,12 +42,17 @@ export default async function CertificatesPage() {
     <>
       <PageHeader
         title="Certificates"
-        description="Add certificates and their scans. Searching, filtering and downloads for staff come in Phase 4."
+        description="Add certificates from their PDFs or scans, or by hand. Searching, filtering and downloads for staff come in Phase 4."
       />
       <div className="mb-6 flex flex-wrap gap-3">
         <Button asChild size="lg" className="w-full sm:w-auto">
+          <Link href="/admin/certificates/import">
+            <ScanText /> Add from files
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
           <Link href="/admin/certificates/new">
-            <Plus /> Add certificate
+            <Plus /> Add by hand
           </Link>
         </Button>
         <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
@@ -78,7 +84,8 @@ export default async function CertificatesPage() {
                           .join(" · ")}
                       </p>
                       {r.summary ? <p className="mt-1 text-sm break-words">{r.summary}</p> : null}
-                      <div className="mt-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {r.needs_review ? <Badge variant="warning">Check</Badge> : null}
                         {r.files > 0 ? (
                           <Badge variant="success">
                             {r.files} file{r.files === 1 ? "" : "s"}

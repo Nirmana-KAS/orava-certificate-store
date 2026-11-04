@@ -28,6 +28,8 @@ function contentSecurityPolicy(nonce: string, request: NextRequest): string {
     // Inline style attributes are used by Next.js and Radix; scripts stay strictly nonce-based
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
+    // Text reading (OCR) and PDF rendering run in workers loaded from /ocr on this site
+    "worker-src 'self' blob:",
     "font-src 'self'",
     // The admin's browser sends uploads straight to the private storage bucket
     `connect-src 'self'${storage ? ` ${storage}` : ""}`,
@@ -70,7 +72,7 @@ export const config = {
   matcher: [
     {
       source:
-        "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|opengraph-image.png|manifest.webmanifest|robots.txt|brand/|icons/).*)",
+        "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|opengraph-image.png|manifest.webmanifest|robots.txt|brand/|icons/|ocr/).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

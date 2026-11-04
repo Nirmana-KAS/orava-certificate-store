@@ -1,12 +1,14 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import * as React from "react";
 import { useActionState, useState } from "react";
 
 import { Field } from "@/components/forms/field";
 import { FormAlert } from "@/components/forms/form-alert";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,10 +25,14 @@ function TableEditor({
   field,
   initial,
   error,
+  idPrefix,
+  mark,
 }: {
   field: FieldDef;
   initial: unknown;
   error?: string;
+  idPrefix: string;
+  mark?: React.ReactNode;
 }) {
   const columns = field.columns ?? [];
   const [rows, setRows] = useState<Row[]>(() =>
@@ -42,9 +48,10 @@ function TableEditor({
 
   return (
     <div className="grid gap-3">
-      <p className="text-sm font-medium">
+      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
         {field.label}
         {field.required ? " *" : ""}
+        {mark}
       </p>
       <input type="hidden" name={tableName(field.key)} value={JSON.stringify(rows)} />
       {rows.length === 0 ? (
@@ -60,6 +67,7 @@ function TableEditor({
                 key={c.key}
                 label={c.label}
                 name={`row-${field.key}-${i}-${c.key}`}
+                id={`${idPrefix}row-${field.key}-${i}-${c.key}`}
                 type={c.kind === "date" ? "date" : "text"}
                 inputMode={c.kind === "number" || c.kind === "carat" ? "decimal" : undefined}
                 value={row[c.key] ?? ""}
@@ -93,6 +101,150 @@ function TableEditor({
   );
 }
 
+/** The inputs for every field of a type. Used by the certificate form and the import review. */
+export function CertificateFields({
+  fields,
+  values,
+  errors = {},
+  typed,
+  idPrefix = "",
+  marks = {},
+}: {
+  fields: FieldDef[];
+  values: EntryData;
+  errors?: Record<string, string>;
+  /** Values the admin typed, given back by the server after an error */
+  typed?: Record<string, string>;
+  /** Prefix for element ids when several forms share a page */
+  idPrefix?: string;
+  /** Something to show next to a field's label, e.g. "Check" after automatic reading */
+  marks?: Record<string, React.ReactNode>;
+}) {
+  const err = errors;
+  return (
+    <div className="grid gap-5 md:grid-cols-2">
+      {fields.map((f) => {
+        const name = inputName(f.key);
+        const id = `${idPrefix}${name}`;
+        const text_ = f.required ? `${f.label} *` : f.label;
+        const mark = marks[f.key];
+        const label = mark ? (
+          <span className="flex flex-wrap items-center gap-2">
+            {text_}
+            {mark}
+          </span>
+        ) : (
+          text_
+        );
+        const v = values[f.key];
+
+        if (f.kind === "table") {
+          return (
+            <div key={f.key} className="md:col-span-2">
+              <TableEditor
+                field={f}
+                initial={v}
+                error={err[f.key]}
+                idPrefix={idPrefix}
+                mark={mark}
+              />
+            </div>
+          );
+        }
+        if (f.kind === "longtext") {
+          return (
+            <div key={f.key} className="grid gap-2 md:col-span-2">
+              <Label htmlFor={id}>{label}</Label>
+              <Textarea
+                id={id}
+                name={name}
+                defaultValue={typed?.[name] ?? text(v)}
+                aria-invalid={err[f.key] ? true : undefined}
+              />
+              {err[f.key] ? (
+                <p className="text-sm font-medium text-destructive">{err[f.key]}</p>
+              ) : null}
+            </div>
+          );
+        }
+        if (f.kind === "select") {
+          return (
+            <div key={f.key} className="grid gap-2">
+              <Label htmlFor={id}>{label}</Label>
+              <Select
+                id={id}
+                name={name}
+                defaultValue={typed?.[name] ?? text(v)}
+                aria-invalid={err[f.key] ? true : undefined}
+              >
+                <option value="">Not set</option>
+                {f.options?.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </Select>
+              {err[f.key] ? (
+                <p className="text-sm font-medium text-destructive">{err[f.key]}</p>
+              ) : null}
+            </div>
+          );
+        }
+        if (f.kind === "multiselect") {
+          const picked =
+            typed?.[name] !== undefined
+              ? typed[name].split("\n")
+              : Array.isArray(v)
+                ? (v as string[])
+                : [];
+          return (
+            <fieldset key={f.key} className="grid gap-1 md:col-span-2">
+              <legend className="mb-1 text-sm font-medium">{label}</legend>
+              <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+                {f.options?.map((o) => (
+                  <label
+                    key={o}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name={name}
+                      value={o}
+                      defaultChecked={picked.includes(o)}
+                      className="size-6 shrink-0 cursor-pointer accent-primary"
+                    />
+                    {o}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          );
+        }
+        return (
+          <div key={f.key} className="grid gap-2">
+            <Label htmlFor={id}>{label}</Label>
+            <Input
+              id={id}
+              name={name}
+              type={f.kind === "date" ? "date" : "text"}
+              inputMode={f.kind === "number" || f.kind === "carat" ? "decimal" : undefined}
+              defaultValue={typed?.[name] ?? text(v)}
+              aria-invalid={err[f.key] ? true : undefined}
+              aria-describedby={err[f.key] ? `${id}-error` : undefined}
+              autoComplete="off"
+            />
+            {err[f.key] ? (
+              <p id={`${id}-error`} className="text-sm font-medium text-destructive">
+                {err[f.key]}
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** The form for one certificate, built from the fields of its type. */
 export function CertificateForm({
   typeId,
@@ -106,108 +258,16 @@ export function CertificateForm({
   values: EntryData;
 }) {
   const [state, action] = useActionState(saveCertificateAction.bind(null, typeId, certId), null);
-  const err = state?.fields ?? {};
-  const typed = state?.values;
 
   return (
     <form action={action} noValidate className="grid gap-5">
       <FormAlert state={state} />
-      <div className="grid gap-5 md:grid-cols-2">
-        {fields.map((f) => {
-          const name = inputName(f.key);
-          const label = f.required ? `${f.label} *` : f.label;
-          const v = values[f.key];
-
-          if (f.kind === "table") {
-            return (
-              <div key={f.key} className="md:col-span-2">
-                <TableEditor field={f} initial={v} error={err[f.key]} />
-              </div>
-            );
-          }
-          if (f.kind === "longtext") {
-            return (
-              <div key={f.key} className="grid gap-2 md:col-span-2">
-                <Label htmlFor={name}>{label}</Label>
-                <Textarea
-                  id={name}
-                  name={name}
-                  defaultValue={typed?.[name] ?? text(v)}
-                  aria-invalid={err[f.key] ? true : undefined}
-                />
-                {err[f.key] ? (
-                  <p className="text-sm font-medium text-destructive">{err[f.key]}</p>
-                ) : null}
-              </div>
-            );
-          }
-          if (f.kind === "select") {
-            return (
-              <div key={f.key} className="grid gap-2">
-                <Label htmlFor={name}>{label}</Label>
-                <Select
-                  id={name}
-                  name={name}
-                  defaultValue={typed?.[name] ?? text(v)}
-                  aria-invalid={err[f.key] ? true : undefined}
-                >
-                  <option value="">Not set</option>
-                  {f.options?.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </Select>
-                {err[f.key] ? (
-                  <p className="text-sm font-medium text-destructive">{err[f.key]}</p>
-                ) : null}
-              </div>
-            );
-          }
-          if (f.kind === "multiselect") {
-            const picked =
-              typed?.[name] !== undefined
-                ? typed[name].split("\n")
-                : Array.isArray(v)
-                  ? (v as string[])
-                  : [];
-            return (
-              <fieldset key={f.key} className="grid gap-1 md:col-span-2">
-                <legend className="mb-1 text-sm font-medium">{label}</legend>
-                <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {f.options?.map((o) => (
-                    <label
-                      key={o}
-                      className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        name={name}
-                        value={o}
-                        defaultChecked={picked.includes(o)}
-                        className="size-6 shrink-0 cursor-pointer accent-primary"
-                      />
-                      {o}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            );
-          }
-          return (
-            <Field
-              key={f.key}
-              label={label}
-              name={name}
-              type={f.kind === "date" ? "date" : "text"}
-              inputMode={f.kind === "number" || f.kind === "carat" ? "decimal" : undefined}
-              defaultValue={typed?.[name] ?? text(v)}
-              error={err[f.key]}
-              autoComplete="off"
-            />
-          );
-        })}
-      </div>
+      <CertificateFields
+        fields={fields}
+        values={values}
+        errors={state?.fields ?? {}}
+        typed={state?.values}
+      />
       <SubmitButton
         size="lg"
         className="w-full sm:w-auto sm:justify-self-start"

@@ -78,7 +78,7 @@ export async function saveCertificateAction(
         type_version = ${type.version}, title = ${title}, report_no = ${core.report_no},
         report_date = ${core.report_date}, customer = ${core.customer},
         identification = ${core.identification}, weight_ct = ${core.weight_ct}, data = ${json},
-        key_points = ${points}, summary = ${summary}, updated_at = now()
+        key_points = ${points}, summary = ${summary}, needs_review = false, updated_at = now()
       where id = ${certId} and type_id = ${type.id} and deleted_at is null
       returning id
     `;
