@@ -1,18 +1,21 @@
 "use client";
 
-import { FileStack, LayoutDashboard, Settings, Shapes, Users } from "lucide-react";
+import { FileBarChart, FileStack, LayoutDashboard, Settings, Shapes, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-const items = [
+type Item = { href: string; label: string; tab?: string; icon: typeof Users };
+
+const items: Item[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/certificates", label: "Certificates", icon: FileStack },
+  { href: "/admin/certificates", label: "Certificates", tab: "Certs", icon: FileStack },
+  { href: "/admin/reports", label: "Reports", icon: FileBarChart },
   { href: "/admin/types", label: "Types", icon: Shapes },
   { href: "/admin/users", label: "Staff", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 function isActive(pathname: string, href: string) {
   if (href === "/admin") return pathname === href;
@@ -49,10 +52,10 @@ export function AdminNav() {
       <nav
         aria-label="Admin"
         data-tabbar
-        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden"
       >
-        <ul className="mx-auto grid max-w-md grid-cols-5">
-          {items.map(({ href, label, icon: Icon }) => (
+        <ul className="mx-auto grid max-w-lg grid-cols-6">
+          {items.map(({ href, label, tab, icon: Icon }) => (
             <li key={href}>
               <Link
                 href={href}
@@ -60,7 +63,10 @@ export function AdminNav() {
                 className="flex min-h-14 flex-col items-center justify-center gap-1 px-0.5 text-[11px] font-medium text-muted-foreground aria-[current=page]:text-primary"
               >
                 <Icon className="size-5" aria-hidden="true" />
-                {label}
+                <span>
+                  {tab ?? label}
+                  {tab ? <span className="sr-only"> ({label.toLowerCase()})</span> : null}
+                </span>
               </Link>
             </li>
           ))}

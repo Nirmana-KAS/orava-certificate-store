@@ -169,8 +169,8 @@ export async function CertificateDetail({
                       <ImageIcon className="size-5 shrink-0 text-primary" aria-hidden="true" />
                     )}
                     <div className="min-w-0">
-                      <p className="font-medium break-all">{baseNameOf(f.storage_path)}</p>
-                      <p className="text-sm break-all text-muted-foreground">
+                      <p className="font-medium wrap-anywhere">{baseNameOf(f.storage_path)}</p>
+                      <p className="text-sm wrap-anywhere text-muted-foreground">
                         {f.kind.toUpperCase()} · {formatBytes(Number(f.size_bytes))} ·{" "}
                         {formatDateTime(f.created_at)}
                         {f.original_name !== baseNameOf(f.storage_path)

@@ -82,7 +82,7 @@ export default async function UsersPage() {
               <Card className="gap-4 py-4">
                 <CardContent className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
                   <div className="min-w-0">
-                    <p className="font-medium break-all">{u.email}</p>
+                    <p className="font-medium wrap-anywhere">{u.email}</p>
                     {u.name ? <p className="text-sm text-muted-foreground">{u.name}</p> : null}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Badge variant={u.status === "active" ? "success" : "muted"}>

@@ -9,6 +9,7 @@ export type SearchRow = {
   title: string;
   report_no: string | null;
   report_date: string | null;
+  report_date_iso: string | null;
   weight_ct: string | null;
   identification: string | null;
   customer: string | null;
@@ -53,9 +54,13 @@ function orderBy(sql: ReturnType<typeof db>, key: SortKey) {
 /** "50%" typed in the box means the text 50%, not a wildcard. */
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
 
-/** Live certificates matching the filters, one page at a time, with the total count. */
+/**
+ * Live certificates matching the filters, one page at a time, with the total count. With
+ * `limit`, the first `limit` matches (for reports) instead of a page.
+ */
 export async function searchCertificates(
   f: Filters,
+  opts: { limit?: number } = {},
 ): Promise<{ rows: SearchRow[]; total: number }> {
   const sql = db();
   const words = (f.q ?? "").split(/\s+/).filter(Boolean).slice(0, 8);
@@ -76,10 +81,12 @@ export async function searchCertificates(
   );
 
   const second = f.then && f.then !== f.sort ? sql`, ${orderBy(sql, f.then)}` : sql``;
-  const offset = (f.page - 1) * PAGE_SIZE;
+  const limit = opts.limit ?? PAGE_SIZE;
+  const offset = opts.limit ? 0 : (f.page - 1) * PAGE_SIZE;
 
   const rows = await sql<(SearchRow & { total: number })[]>`
     select c.id, c.title, c.report_no, to_char(c.report_date, 'DD Mon YYYY') as report_date,
+      to_char(c.report_date, 'YYYY-MM-DD') as report_date_iso,
       c.weight_ct::text as weight_ct, c.identification, c.customer,
       nullif(c.data->>'origin', '') as origin, c.summary,
       t.name as type_name, t.icon as type_icon, t.color as type_color, t.category,
@@ -107,7 +114,7 @@ export async function searchCertificates(
       ${f.max !== undefined ? sql`and c.weight_ct <= ${f.max}` : sql``}
       ${wordConditions}
     order by ${orderBy(sql, f.sort)}${second}, c.id
-    limit ${PAGE_SIZE} offset ${offset}
+    limit ${limit} offset ${offset}
   `;
   let total = rows[0]?.total ?? 0;
   if (rows.length === 0 && offset > 0) {

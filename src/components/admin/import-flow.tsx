@@ -487,7 +487,7 @@ function ItemCard({
       <header className="flex min-w-0 items-start gap-3">
         <FileText className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium break-all">{item.file.name}</p>
+          <p className="font-medium wrap-anywhere">{item.file.name}</p>
           <p className="text-sm text-muted-foreground">{formatBytes(item.file.size)}</p>
         </div>
         {item.state === "saved" ? (
@@ -784,7 +784,7 @@ function DuplicateChoice({
           aria-label="This file"
         >
           <h3 className="text-sm font-semibold">This file</h3>
-          <p className="text-xs break-all text-muted-foreground">{fileName}</p>
+          <p className="text-xs wrap-anywhere text-muted-foreground">{fileName}</p>
           <dl className="grid gap-1 text-sm">
             {rows.map(([label, before, value]) => (
               <div key={label} className="grid grid-cols-[7.5rem_1fr] gap-2">

@@ -18,7 +18,7 @@ import {
 } from "@/lib/certificates/filters";
 import { CATEGORY_LABELS } from "@/lib/labs";
 import { logoUrl } from "@/lib/server/labs";
-import { filterOptions, searchCertificates } from "@/lib/server/search";
+import { filterOptions, searchCertificates, type FilterOptions } from "@/lib/server/search";
 
 /**
  * Search box, filters, sorting and the matching certificates, one page at a time. Everything is
@@ -109,94 +109,7 @@ export async function CertificateSearch({
             />
           </summary>
           <div className="grid gap-4 border-t p-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FilterSelect id="lab" label="Lab" value={f.lab}>
-              {options.labs.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect id="category" label="Kind of report" value={f.category}>
-              {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect id="type" label="Certificate type" value={f.type}>
-              {options.types.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect id="gem" label="Stone (identification)" value={f.gem}>
-              {options.gems.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </FilterSelect>
-            <FilterSelect id="origin" label="Origin" value={f.origin}>
-              {options.origins.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </FilterSelect>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="from">Date from</Label>
-                <Input id="from" name="from" type="date" defaultValue={f.from ?? ""} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="to">Date to</Label>
-                <Input id="to" name="to" type="date" defaultValue={f.to ?? ""} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="min">Carats from</Label>
-                <Input
-                  id="min"
-                  name="min"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="any"
-                  defaultValue={f.min ?? ""}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="max">Carats to</Label>
-                <Input
-                  id="max"
-                  name="max"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="any"
-                  defaultValue={f.max ?? ""}
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="sort">Sort by</Label>
-              <Select id="sort" name="sort" defaultValue={f.sort}>
-                {Object.entries(SORTS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <FilterSelect id="then" label="Then by" value={f.then} emptyLabel="Nothing">
-              {Object.entries(SORTS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </FilterSelect>
+            <FilterFields filters={f} options={options} />
             <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
               <Button type="submit">Apply</Button>
               <Button asChild variant="outline">
@@ -216,7 +129,7 @@ export async function CertificateSearch({
                 className="inline-flex min-h-11 items-center gap-1 rounded-full border bg-secondary px-3 text-sm hover:bg-accent"
                 aria-label={`Remove filter ${c.label}`}
               >
-                <span className="break-all">{c.label}</span>
+                <span className="wrap-anywhere">{c.label}</span>
                 <X className="size-4 shrink-0" aria-hidden="true" />
               </Link>
             </li>
@@ -344,7 +257,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   return (
     <div className="flex min-w-0 gap-1">
       <dt className="text-muted-foreground">{label}:</dt>
-      <dd className="font-medium break-all">{children}</dd>
+      <dd className="font-medium wrap-anywhere">{children}</dd>
     </div>
   );
 }
@@ -370,5 +283,110 @@ function FilterSelect({
         {children}
       </Select>
     </div>
+  );
+}
+
+/** The filter and sort boxes, shared by the search and the report builder. */
+export function FilterFields({
+  filters: f,
+  options,
+}: {
+  filters: Filters;
+  options: FilterOptions;
+}) {
+  return (
+    <>
+      <FilterSelect id="lab" label="Lab" value={f.lab}>
+        {options.labs.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect id="category" label="Kind of report" value={f.category}>
+        {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+          <option key={k} value={k}>
+            {v}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect id="type" label="Certificate type" value={f.type}>
+        {options.types.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect id="gem" label="Stone (identification)" value={f.gem}>
+        {options.gems.map((g) => (
+          <option key={g} value={g}>
+            {g}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect id="origin" label="Origin" value={f.origin}>
+        {options.origins.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </FilterSelect>
+      {/* Two date boxes side by side only where both fit (a date box needs about 150 px) */}
+      <div className="@container">
+        <div className="grid gap-3 @xs:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="from">Date from</Label>
+            <Input id="from" name="from" type="date" defaultValue={f.from ?? ""} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="to">Date to</Label>
+            <Input id="to" name="to" type="date" defaultValue={f.to ?? ""} />
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-2">
+          <Label htmlFor="min">Carats from</Label>
+          <Input
+            id="min"
+            name="min"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            defaultValue={f.min ?? ""}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="max">Carats to</Label>
+          <Input
+            id="max"
+            name="max"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            defaultValue={f.max ?? ""}
+          />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="sort">Sort by</Label>
+        <Select id="sort" name="sort" defaultValue={f.sort}>
+          {Object.entries(SORTS).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <FilterSelect id="then" label="Then by" value={f.then} emptyLabel="Nothing">
+        {Object.entries(SORTS).map(([k, v]) => (
+          <option key={k} value={k}>
+            {v}
+          </option>
+        ))}
+      </FilterSelect>
+    </>
   );
 }

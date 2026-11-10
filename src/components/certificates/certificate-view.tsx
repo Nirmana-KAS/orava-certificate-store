@@ -100,7 +100,7 @@ export async function CertificateView({
                   <div className="flex min-w-0 items-center gap-3">
                     <FileText className="size-5 shrink-0 text-primary" aria-hidden="true" />
                     <div className="min-w-0">
-                      <p className="font-medium break-all">{baseNameOf(f.storage_path)}</p>
+                      <p className="font-medium wrap-anywhere">{baseNameOf(f.storage_path)}</p>
                       <p className="text-sm text-muted-foreground">
                         {formatBytes(Number(f.size_bytes))}
                       </p>

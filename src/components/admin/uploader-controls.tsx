@@ -53,8 +53,8 @@ export function IssueUploadPasskey({
           className="grid gap-2 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm"
         >
           <p>
-            Upload passkey for <span className="font-medium break-all">{state.email}</span>. It is
-            shown only now: copy it and give it to them privately.
+            Upload passkey for <span className="font-medium wrap-anywhere">{state.email}</span>. It
+            is shown only now: copy it and give it to them privately.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <code

@@ -104,7 +104,7 @@ export default async function AdminOverviewPage() {
                         <span className="font-normal text-muted-foreground"> · {a.target}</span>
                       ) : null}
                     </span>
-                    <span className="break-all text-muted-foreground">
+                    <span className="wrap-anywhere text-muted-foreground">
                       {a.actor_email ?? "System"} · {formatDateTime(a.at)}
                     </span>
                   </li>
@@ -129,7 +129,7 @@ export default async function AdminOverviewPage() {
                       <Badge variant={severityVariant[e.severity]}>{e.severity}</Badge>
                       {e.kind.replaceAll("_", " ")}
                     </span>
-                    <span className="break-all text-muted-foreground">
+                    <span className="wrap-anywhere text-muted-foreground">
                       {[e.email, e.ip].filter(Boolean).join(" · ") || "Unknown source"} ·{" "}
                       {formatDateTime(e.at)}
                     </span>

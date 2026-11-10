@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, Minus, Upload } from "lucide-react";
+import { Check, FileBarChart, Minus, Upload } from "lucide-react";
 
 import { CertificateSearch } from "@/components/certificates/certificate-search";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default async function CertificatesPage({
   const access = [
     { on: true, label: "Search and open certificates" },
     { on: isAdmin || user.canDownload, label: "Download files" },
-    { on: isAdmin || user.canReport, label: "Make reports (coming soon)" },
+    { on: isAdmin || user.canReport, label: "Make reports" },
     ...(user.canUpload ? [{ on: true, label: "Add and change certificates" }] : []),
   ];
 
@@ -31,7 +31,7 @@ export default async function CertificatesPage({
       <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Certificates</h1>
-          <p className="mt-1 break-all text-muted-foreground">Signed in as {user.email}</p>
+          <p className="mt-1 wrap-anywhere text-muted-foreground">Signed in as {user.email}</p>
           <ul aria-label="What you can do" className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
             {access.map((a) => (
               <li
@@ -51,13 +51,22 @@ export default async function CertificatesPage({
             ))}
           </ul>
         </div>
-        {user.canUpload ? (
-          <Button asChild className="w-full lg:w-auto">
-            <Link href="/upload">
-              <Upload /> {inUploadMode(session) ? "Go to upload mode" : "Unlock upload mode"}
-            </Link>
-          </Button>
-        ) : null}
+        <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+          {user.canReport ? (
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/reports">
+                <FileBarChart /> Make a report
+              </Link>
+            </Button>
+          ) : null}
+          {user.canUpload ? (
+            <Button asChild className="w-full sm:w-auto">
+              <Link href="/upload">
+                <Upload /> {inUploadMode(session) ? "Go to upload mode" : "Unlock upload mode"}
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <CertificateSearch filters={filters} base="/certificates" detailBase="/certificates" />

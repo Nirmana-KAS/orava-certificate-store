@@ -34,8 +34,8 @@ await sql`
 await sql`update app_settings set passkey_hash = ${await hashSecret(E2E.passkey)}, passkey_rotated_at = now()`;
 await sql`insert into app_users (email, name) values (${E2E.staff.email}, ${E2E.staff.name})`;
 await sql`
-  insert into app_users (email, name, can_upload, upload_passkey_hash, upload_passkey_set_at)
-  values (${E2E.uploader.email}, 'Test Uploader', true,
+  insert into app_users (email, name, can_upload, can_report, upload_passkey_hash, upload_passkey_set_at)
+  values (${E2E.uploader.email}, 'Test Uploader', true, true,
           ${await hashSecret(E2E.uploader.uploadPasskey.replaceAll("-", ""))}, now())
 `;
 await sql`insert into app_users (email, status) values (${E2E.disabled.email}, 'disabled')`;

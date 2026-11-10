@@ -42,6 +42,7 @@ const actionLabels: Record<string, string> = {
   "user.upload_passkey_reset": "Issued a new upload passkey",
   "upload.unlock": "Unlocked upload mode",
   "upload.lock": "Locked upload mode",
+  "report.export": "Downloaded a report",
   "upload.locked": "Upload mode locked after wrong passkeys",
   "settings.passkey_rotated": "Changed the shared passkey",
   "settings.lockdown_on": "Turned lockdown on",
