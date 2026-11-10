@@ -19,7 +19,19 @@ export type SessionUser = {
   name: string | null;
   role: Role;
   canDownload: boolean;
+  /** May make reports from filtered lists (staff; the admin always may) */
+  canReport: boolean;
+  /**
+   * An uploader: the admin allowed uploads and issued an upload passkey, and it isn't locked
+   * after wrong tries. Uploading also needs upload mode to be unlocked (see uploadUntil).
+   */
+  canUpload: boolean;
+  /** Upload mode is on until this time for this sign-in, or null */
+  uploadUntil: Date | null;
 };
+
+/** Upload mode ends after this long without activity. */
+export const UPLOAD_MODE_MINUTES = 30;
 
 export type Session = { id: string; user: SessionUser };
 
@@ -58,6 +70,9 @@ type Row = {
   name: string | null;
   role: Role;
   can_download: boolean;
+  can_report: boolean;
+  can_upload: boolean;
+  upload_until: Date | null;
 };
 
 /**
@@ -69,7 +84,11 @@ export const getSession = cache(async (): Promise<Session | null> => {
   if (!token) return null;
 
   const [row] = await db()<Row[]>`
-    select s.id as session_id, s.last_seen_at, u.id, u.email, u.name, u.role, u.can_download
+    select s.id as session_id, s.last_seen_at, u.id, u.email, u.name, u.role, u.can_download,
+      u.can_report,
+      (u.role = 'viewer' and u.can_upload and u.upload_passkey_hash is not null
+        and u.upload_locked_at is null) as can_upload,
+      case when s.upload_until > now() then s.upload_until end as upload_until
     from sessions s
     join app_users u on u.id = s.user_id
     cross join app_settings a
@@ -94,6 +113,9 @@ export const getSession = cache(async (): Promise<Session | null> => {
       name: row.name,
       role: row.role,
       canDownload: row.can_download,
+      canReport: row.can_report,
+      canUpload: row.can_upload,
+      uploadUntil: row.can_upload ? row.upload_until : null,
     },
   };
 });
@@ -111,6 +133,41 @@ export async function requireAdmin(): Promise<Session> {
   if (!session) redirect("/admin/login");
   if (session.user.role !== "admin") redirect("/certificates");
   return session;
+}
+
+/** Upload mode is on for this sign-in right now. */
+export function inUploadMode(session: Session): boolean {
+  return (
+    session.user.role === "viewer" &&
+    session.user.canUpload &&
+    session.user.uploadUntil !== null &&
+    session.user.uploadUntil.getTime() > Date.now()
+  );
+}
+
+/** Where an editor's certificate pages live. */
+export type EditorArea = "admin" | "upload";
+export const certificatesBase = (area: EditorArea) =>
+  area === "admin" ? "/admin/certificates" : "/upload/certificates";
+
+/**
+ * For adding, changing and deleting certificates: the admin, or an uploader whose upload mode is
+ * unlocked on this sign-in. Each use keeps upload mode on for another 30 minutes. Everyone else
+ * is sent away: staff to their certificates, an uploader whose mode ended to the unlock page.
+ */
+export async function requireEditor(): Promise<Session & { area: EditorArea }> {
+  const session = await getSession();
+  if (!session) redirect("/");
+  if (session.user.role === "admin") return { ...session, area: "admin" };
+  if (!session.user.canUpload) redirect("/certificates");
+  if (!inUploadMode(session)) redirect("/upload");
+  const [row] = await db()<{ upload_until: Date }[]>`
+    update sessions set upload_until = now() + make_interval(mins => ${UPLOAD_MODE_MINUTES})
+    where id = ${session.id} and upload_until > now()
+    returning upload_until
+  `;
+  if (!row) redirect("/upload");
+  return { ...session, user: { ...session.user, uploadUntil: row.upload_until }, area: "upload" };
 }
 
 export function homeFor(role: Role): string {
@@ -141,4 +198,11 @@ export async function revokeAllViewerSessions(): Promise<number> {
     returning id
   `;
   return rows.length;
+}
+
+/** For the uploader's pages: an uploader in upload mode. The admin uses the admin pages. */
+export async function requireUploadModePage(): Promise<Session> {
+  const session = await requireEditor();
+  if (session.area === "admin") redirect("/admin/certificates");
+  return session;
 }

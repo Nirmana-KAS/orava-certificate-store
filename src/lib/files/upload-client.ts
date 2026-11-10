@@ -9,7 +9,8 @@ import {
   startUploadAction,
 } from "@/lib/admin/file-actions";
 
-import { MAX_FILE_BYTES, formatBytes, isAllowedMime } from "./rules";
+import { imageFileToPdf } from "./image-to-pdf";
+import { IMAGE_TYPES, MAX_FILE_BYTES, STORE_AS_PDF, formatBytes, isAllowedMime } from "./rules";
 
 export type UploadOutcome = { ok: true } | { ok: false; error: string };
 
@@ -36,16 +37,32 @@ export function fileProblem(file: File): string | null {
   return null;
 }
 
+/** A scan or photo becomes a one-page PDF; a PDF is sent as it is. */
+export async function asStoredFile(file: File): Promise<File> {
+  if (!STORE_AS_PDF || !(IMAGE_TYPES as readonly string[]).includes(file.type)) return file;
+  return imageFileToPdf(file);
+}
+
 export async function uploadToCertificate(
   certId: string,
-  file: File,
+  picked: File,
   onProgress: (p: number) => void,
   onChecking?: () => void,
 ): Promise<UploadOutcome> {
-  const problem = fileProblem(file);
+  const problem = fileProblem(picked);
   if (problem) return { ok: false, error: problem };
+  let file: File;
+  try {
+    file = await asStoredFile(picked);
+  } catch (e) {
+    console.error(e);
+    return { ok: false, error: "This image couldn't be turned into a PDF. Try another scan." };
+  }
+  const tooBig = fileProblem(file);
+  if (tooBig) return { ok: false, error: tooBig };
   const started = await startUploadAction(certId, {
-    name: file.name,
+    // The name it was picked with, shown to the admin (the stored name is ReportNo_Date_Lab)
+    name: picked.name,
     type: file.type,
     size: file.size,
   });

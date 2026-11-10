@@ -90,22 +90,74 @@ test("scans are read, recognised, filled and saved automatically", async ({
   await expect(page.getByLabel("Date of Issue")).toHaveValue("2026-05-09");
   await expect(page.getByLabel("Total weight (cts)")).toHaveValue("12.4");
   await expect(page.getByRole("link", { name: "View", exact: true })).toHaveCount(1);
+  // The scan was stored as a PDF named Report number_Date_Lab
+  await expect(page.getByText("QA20260001_2026-05-09_AIGS.pdf", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "AIGS logo" })).toBeVisible();
   await page.getByText("Text read from short-report.png").click();
   await expect(page.getByText(/ANALYSIS SHORT REPORT/).first()).toBeVisible();
   await noViolations(page, "imported certificate");
 
-  // The same report again is caught as a duplicate
+  const firstUrl = page.url();
+
+  // The same report again is caught: it can only replace the stored one, or be skipped
+  const corrected = await scan(
+    browser,
+    aigsShortReport({
+      reportNo: "QA20260001",
+      customer: "Example Gems (Pvt) Ltd.",
+      stone: "Natural Spinel",
+    }),
+  );
   await page.goto("/admin/certificates/import");
   await page
     .locator("input[type=file]")
     .first()
-    .setInputFiles([{ name: "again.png", mimeType: "image/png", buffer: short }]);
+    .setInputFiles([
+      { name: "again.png", mimeType: "image/png", buffer: corrected },
+      { name: "again-2.png", mimeType: "image/png", buffer: short },
+    ]);
   const again = card(page, "again.png");
   await expect(again.getByText("Already stored", { exact: true })).toBeVisible({
     timeout: 120_000,
   });
-  await again.getByRole("button", { name: "Skip" }).click();
-  await expect(again).toHaveCount(0);
+  await expect(again.getByRole("region", { name: "Stored now" })).toContainText("QA20260001");
+  await expect(again.getByRole("region", { name: "This file" })).toContainText("again.png");
+  await expect(again.getByRole("button", { name: "Save another copy" })).toHaveCount(0);
+  await noSideScroll(page, "duplicate choice");
+  await noViolations(page, "duplicate choice");
+  await again.getByRole("button", { name: "Replace stored one" }).click();
+  await expect(again.getByText(/Replaced the stored one/)).toBeVisible({ timeout: 60_000 });
+
+  const second = card(page, "again-2.png");
+  await expect(second.getByText("Already stored", { exact: true })).toBeVisible({
+    timeout: 120_000,
+  });
+  await second.getByRole("button", { name: "Skip this file" }).click();
+  await expect(second.getByText("Skipped", { exact: true })).toBeVisible();
+  await expect(page.getByText(/1 skipped \(already stored\)/)).toBeVisible();
+
+  // Only one live certificate with that number; the old one is an earlier version
+  await again.getByRole("link", { name: "Open" }).click();
+  await expect(page.getByLabel("Customer")).toHaveValue("Example Gems (Pvt) Ltd.");
+  await expect(page.getByRole("heading", { name: "Earlier versions" })).toBeVisible();
+  await noViolations(page, "certificate with an earlier version");
+  await page.goto("/admin/certificates");
+  await expect(page.locator("main li", { hasText: "QA20260001" })).toHaveCount(1);
+  // The replaced one is no longer a page of its own
+  const gone = await page.request.get(firstUrl);
+  expect(gone.status()).toBe(404);
+
+  // Restore brings the earlier version back and keeps the newer one as history
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "QA20260001" })
+    .getByRole("link", { name: /^Details of/ })
+    .click();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByText(/This version is back/)).toBeVisible();
+  await expect(page.getByLabel("Customer")).toHaveValue("Example Gems Ltd.");
+  await expect(page.getByRole("heading", { name: "Earlier versions" })).toBeVisible();
 });
 
 test("an unknown page waits for the admin to choose the type", async ({
@@ -124,7 +176,7 @@ test("an unknown page waits for the admin to choose the type", async ({
   const c = card(page, "list.png");
   await expect(c.getByText("Look at this")).toBeVisible({ timeout: 120_000 });
   await expect(c.getByText(/couldn't be recognised/)).toBeVisible();
-  await c.getByLabel("Certificate type").selectOption({ label: "AIGS Analysis Short Report" });
+  await c.getByLabel("Certificate type").selectOption({ label: "AIGS Lot Wise Gem Stones Report" });
   await expect(c.getByLabel(/^Report No/)).toBeVisible();
   await expect(c.getByText("Not found").first()).toBeVisible();
 

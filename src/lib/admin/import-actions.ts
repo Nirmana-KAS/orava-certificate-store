@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { audit } from "@/lib/server/audit";
+import { findDuplicate, type DuplicateInfo } from "@/lib/server/duplicates";
 import { db } from "@/lib/server/db";
 import { clientInfo } from "@/lib/server/request";
-import { requireAdmin } from "@/lib/server/session";
+import { requireEditor } from "@/lib/server/session";
 import { getType } from "@/lib/server/types";
 import {
   coreColumns,
@@ -54,26 +55,34 @@ const inputSchema = z.object({
       reread: z.boolean(),
     })
     .strict(),
-  /** True when the admin chose to keep a second certificate with the same report number */
-  allowDuplicate: z.boolean().default(false),
+  /**
+   * The stored certificate with the same report number that this one replaces, when the admin
+   * chose Replace. Without it, a duplicate is never saved.
+   */
+  replace: z.uuid().nullable().default(null),
   /** Fields still marked "check" when saved; the certificate is flagged for review */
   toCheck: z.array(z.string().max(60)).max(60).default([]),
 });
 export type ImportInput = z.input<typeof inputSchema>;
 
 export type ImportResult =
-  | { ok: true; id: string; title: string }
+  | { ok: true; id: string; title: string; replaced: boolean }
   | { ok: false; error: string; fields?: Record<string, string> }
-  | { ok: false; duplicate: { id: string; title: string } };
+  | { ok: false; duplicate: DuplicateInfo };
+
+const isUniqueViolation = (e: unknown) =>
+  typeof e === "object" && e !== null && (e as { code?: string }).code === "23505";
+
+export type { DuplicateInfo };
 
 export async function importCertificateAction(input: unknown): Promise<ImportResult> {
-  const session = await requireAdmin();
+  const session = await requireEditor();
   const client = await clientInfo();
   const actor = { id: session.user.id, email: session.user.email };
 
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Some of the values could not be read." };
-  const { typeId, values, tables, ocrText, meta, allowDuplicate, toCheck } = parsed.data;
+  const { typeId, values, tables, ocrText, meta, replace, toCheck } = parsed.data;
 
   const type = await getType(typeId);
   if (!type) return { ok: false, error: "This certificate type no longer exists." };
@@ -101,14 +110,9 @@ export async function importCertificateAction(input: unknown): Promise<ImportRes
   }
 
   const core = coreColumns(type.fields, data);
-  if (core.report_no && !allowDuplicate) {
-    const [dupe] = await db()<{ id: string; title: string }[]>`
-      select id, title from certificates
-      where type_id = ${type.id} and deleted_at is null and lower(report_no) = lower(${core.report_no})
-      limit 1
-    `;
-    if (dupe) return { ok: false, duplicate: dupe };
-  }
+  // One live certificate per report number: a duplicate is only saved by replacing the old one
+  const dupe = core.report_no ? await findDuplicate(type.id, core.report_no) : null;
+  if (dupe && dupe.id !== replace) return { ok: false, duplicate: dupe };
 
   const title = titleFor(type.name, core);
   const summary = renderTemplate(type.summaryTemplate, data);
@@ -117,44 +121,95 @@ export async function importCertificateAction(input: unknown): Promise<ImportRes
   const check = toCheck.filter((k) => known.has(k));
   const extraction = { ...meta, toCheck: check, typeVersion: type.version };
 
-  const [row] = await db()<{ id: string }[]>`
-    insert into certificates
-      (type_id, type_version, title, report_no, report_date, customer, identification, weight_ct,
-       data, key_points, summary, ocr_text, extraction, needs_review, created_by)
-    values (${type.id}, ${type.version}, ${title}, ${core.report_no}, ${core.report_date},
-            ${core.customer}, ${core.identification}, ${core.weight_ct}, ${db().json(data as never)},
-            ${points}, ${summary}, ${ocrText.slice(0, OCR_TEXT_MAX)},
-            ${db().json(extraction as never)}, ${check.length > 0}, ${actor.id})
-    returning id
-  `;
+  let id: string;
+  try {
+    id = await db().begin(async (tx) => {
+      if (dupe) {
+        // The old one becomes history first, so the new one can take its report number
+        await tx`
+          update certificates set deleted_at = now(), replaced_at = now(), updated_at = now()
+          where id = ${dupe.id} and deleted_at is null
+        `;
+      }
+      const [row] = await tx<{ id: string }[]>`
+        insert into certificates
+          (type_id, type_version, title, report_no, report_date, customer, identification,
+           weight_ct, data, key_points, summary, ocr_text, extraction, needs_review, created_by)
+        values (${type.id}, ${type.version}, ${title}, ${core.report_no}, ${core.report_date},
+                ${core.customer}, ${core.identification}, ${core.weight_ct},
+                ${tx.json(data as never)}, ${points}, ${summary},
+                ${ocrText.slice(0, OCR_TEXT_MAX)}, ${tx.json(extraction as never)},
+                ${check.length > 0}, ${actor.id})
+        returning id
+      `;
+      if (dupe) {
+        await tx`update certificates set replaced_by = ${row!.id} where id = ${dupe.id}`;
+        // Versions the old one had replaced now belong to the new one
+        await tx`update certificates set replaced_by = ${row!.id} where replaced_by = ${dupe.id}`;
+      }
+      return row!.id;
+    });
+  } catch (error) {
+    // Someone saved the same report number a moment ago
+    if (isUniqueViolation(error) && core.report_no) {
+      const now = await findDuplicate(type.id, core.report_no);
+      if (now) return { ok: false, duplicate: now };
+    }
+    throw error;
+  }
+
   await audit(actor, meta.auto ? "certificate.import_auto" : "certificate.import", client, title, {
     type: type.name,
     file: meta.fileName,
     toCheck: check.length,
   });
+  if (dupe) {
+    await audit(actor, "certificate.replace", client, title, {
+      replaced: dupe.id,
+      reportNo: core.report_no,
+    });
+  }
   revalidatePath("/admin/certificates");
-  return { ok: true, id: row!.id, title };
+  revalidatePath("/upload/certificates");
+  return { ok: true, id, title, replaced: !!dupe };
 }
 
 /**
  * Takes back a certificate that was just imported when its file could not be kept (for
  * example the same file is already stored). Only works on the admin's own import from the
- * last 30 minutes that has no files.
+ * last 30 minutes that has no files. If it replaced an older certificate, that one comes back.
  */
 export async function discardImportAction(certId: string): Promise<void> {
-  const session = await requireAdmin();
+  const session = await requireEditor();
   if (!uuid.safeParse(certId).success) return;
   const client = await clientInfo();
-  const [row] = await db()<{ title: string }[]>`
-    update certificates set deleted_at = now(), updated_at = now()
-    where id = ${certId} and deleted_at is null and created_by = ${session.user.id}
-      and created_at > now() - interval '30 minutes'
-      and extraction is not null
-      and not exists (
-        select 1 from certificate_files f where f.certificate_id = certificates.id and f.status = 'ready'
-      )
-    returning title
-  `;
+  const row = await db().begin(async (tx) => {
+    const [taken] = await tx<{ title: string }[]>`
+      update certificates set deleted_at = now(), updated_at = now()
+      where id = ${certId} and deleted_at is null and created_by = ${session.user.id}
+        and created_at > now() - interval '30 minutes'
+        and extraction is not null
+        and not exists (
+          select 1 from certificate_files f where f.certificate_id = certificates.id and f.status = 'ready'
+        )
+      returning title
+    `;
+    if (!taken) return null;
+    // Bring back what it replaced: the newest replaced version becomes live again
+    const [back] = await tx<{ id: string }[]>`
+      select id from certificates where replaced_by = ${certId}
+      order by replaced_at desc nulls last, created_at desc limit 1
+    `;
+    if (back) {
+      await tx`
+        update certificates set deleted_at = null, replaced_by = null, replaced_at = null,
+          updated_at = now()
+        where id = ${back.id}
+      `;
+      await tx`update certificates set replaced_by = ${back.id} where replaced_by = ${certId}`;
+    }
+    return taken;
+  });
   if (!row) return;
   await audit(
     { id: session.user.id, email: session.user.email },

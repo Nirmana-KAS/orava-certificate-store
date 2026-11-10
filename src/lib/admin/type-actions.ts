@@ -41,6 +41,16 @@ export async function saveTypeAction(
   const t = parsed.data;
   const fieldsJson = db().json(t.fields as never);
 
+  // The lab's short name is kept on the type too, for quick filtering
+  let lab = "";
+  if (t.labId) {
+    const [row] = await db()<{ short_name: string }[]>`
+      select short_name from labs where id = ${t.labId}
+    `;
+    if (!row) return { error: "The chosen lab no longer exists. Please choose another." };
+    lab = row.short_name;
+  }
+
   if (typeId === null) {
     const base = slugify(t.name);
     let slug = base;
@@ -51,9 +61,9 @@ export async function saveTypeAction(
     }
     const [row] = await db()<{ id: string }[]>`
       insert into certificate_types
-        (slug, name, lab, description, icon, color, expiry_tracking, expiry_warning_days,
-         fields, fingerprints, summary_template, created_by, sort_order)
-      values (${slug}, ${t.name}, ${t.lab}, ${t.description}, ${t.icon}, ${t.color},
+        (slug, name, lab, lab_id, category, description, icon, color, expiry_tracking,
+         expiry_warning_days, fields, fingerprints, summary_template, created_by, sort_order)
+      values (${slug}, ${t.name}, ${lab}, ${t.labId}, ${t.category}, ${t.description}, ${t.icon}, ${t.color},
               ${t.expiryTracking}, ${t.expiryWarningDays}, ${fieldsJson}, ${t.fingerprints},
               ${t.summaryTemplate}, ${actor.id},
               (select coalesce(max(sort_order), 0) + 1 from certificate_types))
@@ -77,7 +87,8 @@ export async function saveTypeAction(
     `;
     await tx`
       update certificate_types set
-        name = ${t.name}, lab = ${t.lab}, description = ${t.description}, icon = ${t.icon},
+        name = ${t.name}, lab = ${lab}, lab_id = ${t.labId}, category = ${t.category},
+        description = ${t.description}, icon = ${t.icon},
         color = ${t.color}, expiry_tracking = ${t.expiryTracking},
         expiry_warning_days = ${t.expiryWarningDays}, fields = ${tx.json(t.fields as never)},
         fingerprints = ${t.fingerprints}, summary_template = ${t.summaryTemplate},

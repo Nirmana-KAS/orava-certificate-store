@@ -1,25 +1,66 @@
 import type { Metadata } from "next";
-import { FileSearch } from "lucide-react";
+import Link from "next/link";
+import { Check, Minus, Upload } from "lucide-react";
 
-import { requireUser } from "@/lib/server/session";
+import { CertificateSearch } from "@/components/certificates/certificate-search";
+import { Button } from "@/components/ui/button";
+import { parseFilters } from "@/lib/certificates/filters";
+import { inUploadMode, requireUser } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Certificates" };
 
-export default async function CertificatesPage() {
-  const { user } = await requireUser();
+export default async function CertificatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const session = await requireUser();
+  const { user } = session;
+  const isAdmin = user.role === "admin";
+  const filters = parseFilters(await searchParams);
+
+  const access = [
+    { on: true, label: "Search and open certificates" },
+    { on: isAdmin || user.canDownload, label: "Download files" },
+    { on: isAdmin || user.canReport, label: "Make reports (coming soon)" },
+    ...(user.canUpload ? [{ on: true, label: "Add and change certificates" }] : []),
+  ];
 
   return (
     <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Certificates</h1>
-      <p className="mt-1 text-muted-foreground">Signed in as {user.email}</p>
-
-      <div className="mt-8 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
-        <FileSearch className="size-10 text-primary" aria-hidden="true" />
-        <h2 className="text-lg font-semibold">No certificates yet</h2>
-        <p className="max-w-md text-sm text-muted-foreground">
-          Search, filters and downloads appear here once the admin uploads certificates.
-        </p>
+      <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Certificates</h1>
+          <p className="mt-1 break-all text-muted-foreground">Signed in as {user.email}</p>
+          <ul aria-label="What you can do" className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {access.map((a) => (
+              <li
+                key={a.label}
+                className={`flex items-center gap-1.5 ${a.on ? "" : "text-muted-foreground line-through"}`}
+              >
+                {a.on ? (
+                  <Check className="size-4 text-success" aria-hidden="true" />
+                ) : (
+                  <Minus className="size-4" aria-hidden="true" />
+                )}
+                <span>
+                  <span className="sr-only">{a.on ? "Allowed: " : "Not allowed: "}</span>
+                  {a.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {user.canUpload ? (
+          <Button asChild className="w-full lg:w-auto">
+            <Link href="/upload">
+              <Upload /> {inUploadMode(session) ? "Go to upload mode" : "Unlock upload mode"}
+            </Link>
+          </Button>
+        ) : null}
       </div>
+
+      <CertificateSearch filters={filters} base="/certificates" detailBase="/certificates" />
     </div>
   );
 }

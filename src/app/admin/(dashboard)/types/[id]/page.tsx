@@ -7,7 +7,9 @@ import { PageHeader } from "@/components/admin/page-header";
 import { TypeWizard } from "@/components/admin/type-wizard";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { listLabs, logoUrl } from "@/lib/server/labs";
 import { getType } from "@/lib/server/types";
+import { requireAdmin } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Edit certificate type" };
 
@@ -18,11 +20,16 @@ export default async function EditTypePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ saved?: string }>;
 }) {
+  await requireAdmin();
   const { id } = await params;
   const { saved } = await searchParams;
   if (!z.uuid().safeParse(id).success) notFound();
   const type = await getType(id);
   if (!type) notFound();
+  // Archived labs are offered only when this type already uses one
+  const labs = (await listLabs({ includeArchived: true })).filter(
+    (l) => !l.archived || l.id === type.labId,
+  );
 
   return (
     <>
@@ -48,9 +55,16 @@ export default async function EditTypePage({
         key={type.version}
         typeId={type.id}
         certificateCount={type.certificateCount}
+        labs={labs.map((l) => ({
+          id: l.id,
+          shortName: l.shortName,
+          name: l.name,
+          logo: logoUrl(l.id, l.logoVersion),
+        }))}
         initial={{
           name: type.name,
-          lab: type.lab,
+          labId: type.labId,
+          category: type.category,
           description: type.description,
           icon: type.icon,
           color: type.color,

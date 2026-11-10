@@ -15,7 +15,10 @@ const items = [
 ] as const;
 
 function isActive(pathname: string, href: string) {
-  return href === "/admin" ? pathname === href : pathname.startsWith(href);
+  if (href === "/admin") return pathname === href;
+  // Labs are managed together with the types
+  if (href === "/admin/types" && pathname.startsWith("/admin/labs")) return true;
+  return pathname.startsWith(href);
 }
 
 /** Sidebar on large screens, bottom tab bar on phones and tablets. */

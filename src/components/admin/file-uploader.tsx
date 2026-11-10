@@ -90,8 +90,9 @@ export function FileUploader({
         </label>
       </Button>
       <p className="text-sm text-muted-foreground">
-        PDF, JPEG, PNG or WebP, up to {formatBytes(MAX_FILE_BYTES)} each. Every file is checked
-        after upload and kept private.
+        A PDF, or a scan or photo (JPEG, PNG, WebP) which is turned into a PDF first. Up to{" "}
+        {formatBytes(MAX_FILE_BYTES)} each. Every file is checked after upload, kept private and
+        named Report number_Date_Lab.
       </p>
       {items.length > 0 ? (
         <ul className="grid gap-2" aria-live="polite">

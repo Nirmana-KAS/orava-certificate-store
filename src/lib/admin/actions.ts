@@ -7,6 +7,7 @@ import { audit, securityEvent } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { forgetUserDevices } from "@/lib/server/devices";
 import { hashSecret, verifySecret } from "@/lib/server/password";
+import { newUploadPasskey } from "@/lib/server/upload-passkey";
 import { clientInfo } from "@/lib/server/request";
 import { requireAdmin, revokeAllViewerSessions, revokeUserSessions } from "@/lib/server/session";
 import { fieldErrors, newUserSchema, passkeySchema, type FormState } from "@/lib/validation";
@@ -83,6 +84,83 @@ export async function setUserDownloadAction(userId: string, canDownload: boolean
 
   await db()`update app_users set can_download = ${canDownload}, updated_at = now() where id = ${userId}`;
   await audit(actor, "user.download_permission", client, email, { canDownload });
+  revalidatePath("/admin/users");
+}
+
+export async function setUserReportAction(userId: string, canReport: boolean): Promise<void> {
+  const { actor, client } = await context();
+  if (!uuid.safeParse(userId).success) return;
+  const email = await viewerEmail(userId);
+  if (!email) return;
+
+  await db()`update app_users set can_report = ${canReport}, updated_at = now() where id = ${userId}`;
+  await audit(actor, "user.report_permission", client, email, { canReport });
+  revalidatePath("/admin/users");
+}
+
+// ── Uploaders: special staff who can add, replace, edit and delete certificates ─────────────
+
+export type IssuedPasskey = { email: string; passkey: string } | { error: string } | null;
+
+/**
+ * Makes a staff member an uploader, or gives an uploader a new upload passkey (which also lifts
+ * a lock after wrong tries). The passkey is returned once, for the admin to pass on privately;
+ * only its hash is kept. Any open upload mode ends, so the new passkey is needed straight away.
+ */
+export async function issueUploadPasskeyAction(
+  userId: string,
+  _prev: IssuedPasskey,
+): Promise<IssuedPasskey> {
+  void _prev; // useActionState passes the last result; a new passkey doesn't depend on it
+  const { actor, client } = await context();
+  if (!uuid.safeParse(userId).success) return { error: "Unknown staff member." };
+  const [user] = await db()<{ email: string; can_upload: boolean; status: string }[]>`
+    select email, can_upload, status from app_users where id = ${userId} and role = 'viewer'
+  `;
+  if (!user) return { error: "This staff member no longer exists." };
+  if (user.status !== "active") return { error: "Enable this staff member first." };
+
+  const { passkey, hash } = await newUploadPasskey();
+  await db()`
+    update app_users set can_upload = true, upload_passkey_hash = ${hash},
+      upload_passkey_set_at = now(), upload_failures = 0, upload_locked_at = null,
+      updated_at = now()
+    where id = ${userId}
+  `;
+  await db()`update sessions set upload_until = null where user_id = ${userId}`;
+  await audit(
+    actor,
+    user.can_upload ? "user.upload_passkey_reset" : "user.uploader_on",
+    client,
+    user.email,
+  );
+  await securityEvent(
+    user.can_upload ? "upload_passkey_reset" : "uploader_enabled",
+    "info",
+    client,
+    actor.email,
+    { user: user.email },
+  );
+  revalidatePath("/admin/users");
+  return { email: user.email, passkey };
+}
+
+/** Takes uploads away at once: upload mode ends on their next click, and the passkey is dropped. */
+export async function stopUploaderAction(userId: string): Promise<void> {
+  const { actor, client } = await context();
+  if (!uuid.safeParse(userId).success) return;
+  const email = await viewerEmail(userId);
+  if (!email) return;
+
+  await db()`
+    update app_users set can_upload = false, upload_passkey_hash = null,
+      upload_passkey_set_at = null, upload_failures = 0, upload_locked_at = null,
+      updated_at = now()
+    where id = ${userId}
+  `;
+  await db()`update sessions set upload_until = null where user_id = ${userId}`;
+  await audit(actor, "user.uploader_off", client, email);
+  await securityEvent("uploader_disabled", "info", client, actor.email, { user: email });
   revalidatePath("/admin/users");
 }
 

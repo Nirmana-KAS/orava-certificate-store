@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { inflateSync } from "node:zlib";
 
+import { decodeNames, risksIn } from "./pdf-patterns";
 import type { FileKind } from "./rules";
 
 // Server-side checks on the bytes that were actually uploaded. The browser's claimed type and
@@ -18,23 +19,6 @@ export function detectKind(bytes: Uint8Array): FileKind | null {
   // A PDF may have a few junk bytes before its header; readers accept it within the first 1 KB
   if (Buffer.from(b.subarray(0, 1024)).toString("latin1").includes("%PDF-")) return "pdf";
   return null;
-}
-
-const PDF_RISKS: [RegExp, string][] = [
-  [/\/JavaScript\b/, "JavaScript"],
-  [/\/JS[\s/<([]/, "JavaScript"],
-  [/\/Launch\b/, "a launch action"],
-  [/\/EmbeddedFiles?\b/, "an embedded file"],
-  [/\/RichMedia\b/, "embedded media"],
-  [/\/XFA\b/, "an XFA form"],
-  [/\/Encrypt\b/, "password protection"],
-];
-
-/** PDF names can be written with #xx escapes (e.g. /J#61vaScript); undo that before searching. */
-function decodeNames(text: string): string {
-  return text.replace(/\/[^\s/<>[\]()]+/g, (name) =>
-    name.replace(/#([0-9a-fA-F]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))),
-  );
 }
 
 /**
@@ -66,12 +50,7 @@ export function pdfRisks(bytes: Uint8Array): string[] {
     }
   }
 
-  const found = new Set<string>();
-  for (const text of texts) {
-    const decoded = decodeNames(text);
-    for (const [re, label] of PDF_RISKS) if (re.test(decoded)) found.add(label);
-  }
-  return [...found];
+  return [...new Set(texts.flatMap(risksIn))];
 }
 
 export function sha256(bytes: Uint8Array): string {

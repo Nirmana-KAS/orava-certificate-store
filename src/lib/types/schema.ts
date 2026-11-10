@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CATEGORIES } from "@/lib/labs";
+
 // Shared by the admin forms (browser) and the server actions, so both check the same rules.
 
 export const FIELD_KINDS = [
@@ -103,7 +105,9 @@ export type FieldDef = z.infer<typeof fieldSchema>;
 export const typeInputSchema = z
   .object({
     name: z.string().trim().min(2, "Give the type a name.").max(80),
-    lab: z.string().trim().max(80).default(""),
+    /** The lab that issues this type; its short name is used in file names */
+    labId: z.uuid().nullable().default(null),
+    category: z.enum(CATEGORIES).nullable().default(null),
     description: z.string().trim().max(300).default(""),
     icon: z.string().trim().min(1).max(40).default("file-text"),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Pick a colour."),

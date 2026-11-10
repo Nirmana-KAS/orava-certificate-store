@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AddUserForm } from "@/components/admin/add-user-form";
+import { IssueUploadPasskey } from "@/components/admin/uploader-controls";
 import { PageHeader } from "@/components/admin/page-header";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   removeUserAction,
   setUserDownloadAction,
+  setUserReportAction,
   setUserStatusAction,
   signOutUserAction,
+  stopUploaderAction,
 } from "@/lib/admin/actions";
 import { formatDateTime } from "@/lib/format";
 import { db } from "@/lib/server/db";
+import { requireAdmin } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Staff" };
 
@@ -22,13 +26,23 @@ type Row = {
   name: string | null;
   status: "active" | "disabled";
   can_download: boolean;
+  can_report: boolean;
+  can_upload: boolean;
+  upload_locked_at: Date | null;
+  upload_passkey_set_at: Date | null;
+  in_upload_mode: boolean;
   last_login_at: Date | null;
   sessions: number;
 };
 
 export default async function UsersPage() {
+  await requireAdmin();
   const users = await db()<Row[]>`
-    select u.id, u.email, u.name, u.status, u.can_download, u.last_login_at,
+    select u.id, u.email, u.name, u.status, u.can_download, u.can_report, u.can_upload,
+      u.upload_locked_at, u.upload_passkey_set_at, u.last_login_at,
+      exists (select 1 from sessions s
+        where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()
+          and s.upload_until > now()) as in_upload_mode,
       (select count(*)::int from sessions s
         where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()) as sessions
     from app_users u
@@ -40,7 +54,7 @@ export default async function UsersPage() {
     <>
       <PageHeader
         title="Staff"
-        description="Only emails on this list can sign in with the shared passkey."
+        description="Only emails on this list can sign in with the shared passkey. Choose what each person may do."
       />
 
       <Card className="mb-6">
@@ -77,11 +91,48 @@ export default async function UsersPage() {
                       <Badge variant={u.can_download ? "default" : "warning"}>
                         {u.can_download ? "Can download" : "View only"}
                       </Badge>
+                      {u.can_report ? <Badge>Can make reports</Badge> : null}
+                      {u.can_upload && u.upload_locked_at ? (
+                        <Badge variant="danger">Uploads locked</Badge>
+                      ) : u.can_upload ? (
+                        <Badge variant="success">Uploader</Badge>
+                      ) : null}
+                      {u.in_upload_mode ? <Badge variant="success">In upload mode</Badge> : null}
                       {u.sessions > 0 ? <Badge>Signed in ({u.sessions})</Badge> : null}
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">
                       Last sign-in: {formatDateTime(u.last_login_at)}
                     </p>
+                    {u.can_upload && u.upload_locked_at ? (
+                      <p className="mt-1 text-sm text-destructive">
+                        Locked after 5 wrong upload passkeys on {formatDateTime(u.upload_locked_at)}
+                        . Give a new passkey to unlock.
+                      </p>
+                    ) : u.can_upload ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Upload passkey made: {formatDateTime(u.upload_passkey_set_at)}
+                      </p>
+                    ) : null}
+                    {u.status === "active" ? (
+                      <div className="mt-3 flex flex-wrap items-start gap-2">
+                        <IssueUploadPasskey
+                          userId={u.id}
+                          email={u.email}
+                          isUploader={u.can_upload}
+                        />
+                        {u.can_upload ? (
+                          <form action={stopUploaderAction.bind(null, u.id)}>
+                            <SubmitButton
+                              variant="outline"
+                              size="sm"
+                              confirm={`Stop uploads for ${u.email}? Their upload passkey stops working now.`}
+                            >
+                              Stop uploads
+                            </SubmitButton>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2 md:justify-end">
@@ -99,6 +150,11 @@ export default async function UsersPage() {
                     <form action={setUserDownloadAction.bind(null, u.id, !u.can_download)}>
                       <SubmitButton variant="outline" size="sm">
                         {u.can_download ? "Make view only" : "Allow downloads"}
+                      </SubmitButton>
+                    </form>
+                    <form action={setUserReportAction.bind(null, u.id, !u.can_report)}>
+                      <SubmitButton variant="outline" size="sm">
+                        {u.can_report ? "Stop reports" : "Allow reports"}
                       </SubmitButton>
                     </form>
                     {u.sessions > 0 ? (

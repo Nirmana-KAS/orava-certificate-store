@@ -64,7 +64,7 @@ export const adminFlowProjects: Project[] = [
   { name: "laptop-1280", width: 1280, height: 800, mobile: false },
 ].map((v) => ({
   name: `admin-flows-${v.name}`,
-  testMatch: /(certificates|import)\.spec\.ts/,
+  testMatch: /(certificates|import|permissions|search)\.spec\.ts/,
   dependencies: ["setup"],
   use: {
     ...devices["Desktop Chrome"],

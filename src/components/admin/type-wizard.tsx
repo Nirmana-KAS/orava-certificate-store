@@ -3,6 +3,9 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
+import Link from "next/link";
+
+import { LabLogo } from "@/components/admin/lab-logo";
 import { SampleTester } from "@/components/admin/sample-tester";
 import { TypeIcon } from "@/components/admin/type-icon";
 import { Field } from "@/components/forms/field";
@@ -16,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { saveTypeAction } from "@/lib/admin/type-actions";
+import { CATEGORIES, CATEGORY_LABELS, typeNameFor, type Category } from "@/lib/labs";
 import {
   COLUMN_KINDS,
   FIELD_KINDS,
@@ -125,10 +129,13 @@ function newField(): DraftField {
 
 type Initial = TypeInput | null;
 
+export type WizardLab = { id: string; shortName: string; name: string; logo: string | null };
+
 /** Turns the form state into the JSON the server checks and saves. */
 function toConfig(d: {
   name: string;
-  lab: string;
+  labId: string;
+  category: Category | "";
   description: string;
   icon: string;
   color: string;
@@ -190,7 +197,8 @@ function toConfig(d: {
   });
   return {
     name: d.name,
-    lab: d.lab,
+    labId: d.labId || null,
+    category: d.category || null,
     description: d.description,
     icon: d.icon,
     color: d.color,
@@ -228,17 +236,31 @@ export function TypeWizard({
   typeId,
   initial,
   certificateCount,
+  labs,
 }: {
   typeId: string | null;
   initial: Initial;
   certificateCount: number;
+  labs: WizardLab[];
 }) {
   const [state, action] = useActionState(saveTypeAction.bind(null, typeId), null);
   const [step, setStep] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
 
   const [name, setName] = useState(initial?.name ?? "");
-  const [lab, setLab] = useState(initial?.lab ?? "");
+  const [labId, setLabId] = useState(initial?.labId ?? "");
+  const [category, setCategory] = useState<Category | "">(initial?.category ?? "");
+  const lab = labs.find((l) => l.id === labId) ?? null;
+  /** Picking a lab and kind fills in the name, unless the admin typed their own */
+  const autoName = (l: WizardLab | null, c: Category | "") =>
+    l && c ? typeNameFor(l.shortName, c) : "";
+  function pickLab(nextLabId: string, nextCategory: Category | "") {
+    const before = autoName(lab, category);
+    const after = autoName(labs.find((l) => l.id === nextLabId) ?? null, nextCategory);
+    if (after && (!name.trim() || name === before)) setName(after);
+    setLabId(nextLabId);
+    setCategory(nextCategory);
+  }
   const [description, setDescription] = useState(initial?.description ?? "");
   const [icon, setIcon] = useState(initial?.icon ?? "file-text");
   const [color, setColor] = useState(initial?.color ?? "#3a75b1");
@@ -258,7 +280,8 @@ export function TypeWizard({
     () =>
       toConfig({
         name,
-        lab,
+        labId,
+        category,
         description,
         icon,
         color,
@@ -270,7 +293,8 @@ export function TypeWizard({
       }),
     [
       name,
-      lab,
+      labId,
+      category,
       description,
       icon,
       color,
@@ -364,30 +388,67 @@ export function TypeWizard({
             <CardDescription>Name the type and choose how it looks in lists.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="typeLab">Lab</Label>
+                <div className="flex items-center gap-3">
+                  <LabLogo src={lab?.logo ?? null} name={lab?.shortName ?? "Lab"} size="sm" />
+                  <Select
+                    id="typeLab"
+                    value={labId}
+                    onChange={(e) => pickLab(e.target.value, category)}
+                    className="min-w-0 flex-1"
+                  >
+                    <option value="">No lab</option>
+                    {labs.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.shortName} ({l.name})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Its short name goes into every file name.{" "}
+                  <Link href="/admin/labs/new" className="underline" target="_blank">
+                    Add a new lab or logo
+                  </Link>
+                  , then reload this page.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="typeCategory">Kind of report</Label>
+                <Select
+                  id="typeCategory"
+                  value={category}
+                  onChange={(e) => pickLab(labId, e.target.value as Category | "")}
+                >
+                  <option value="">Other</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_LABELS[c]}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  One stone per report, or a lot of several stones.
+                </p>
+              </div>
+            </div>
             <Field
               label="Type name"
               name="typeName"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              hint="Filled in from the lab and kind of report. You can change it."
               autoComplete="off"
             />
-            <div className="grid gap-5 md:grid-cols-2">
-              <Field
-                label="Issuer / laboratory"
-                name="typeLab"
-                value={lab}
-                onChange={(e) => setLab(e.target.value)}
-                hint="Staff can filter by this across all types, for example AIGS."
-                autoComplete="off"
-              />
-              <Field
-                label="Short description"
-                name="typeDescription"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
+            <Field
+              label="Short description"
+              name="typeDescription"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              autoComplete="off"
+            />
             <div className="grid gap-2">
               <Label>Icon</Label>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Icon">
@@ -828,7 +889,11 @@ export function TypeWizard({
               <TypeIcon name={icon} color={color} />
               <div className="min-w-0">
                 <p className="font-medium break-words">{name || "Unnamed type"}</p>
-                <p className="text-sm text-muted-foreground">{lab || "No issuer set"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {[lab?.shortName ?? "No lab", category ? CATEGORY_LABELS[category] : null]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
               </div>
             </div>
             <ul className="grid gap-2">

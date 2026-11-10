@@ -29,25 +29,74 @@ async function noViolations(page: Page, where: string) {
   ).toEqual([]);
 }
 
-test("the four sample types are listed", async ({ page }) => {
+test("the four sample types are listed with their labs and logos", async ({ page }) => {
   await page.goto("/admin/types");
   for (const name of [
-    "AIGS Gemstone Identification Report",
-    "AIGS Analysis Short Report",
-    "Bellerophon Gemmological Report",
-    "Bellerophon Gemmological Testing Results",
+    "AIGS Individual Gem Stone Report",
+    "AIGS Lot Wise Gem Stones Report",
+    "Bellerophon Individual Gem Stone Report",
+    "Bellerophon Lot Wise Gem Stones Report",
   ]) {
     await expect(page.getByText(name, { exact: true })).toBeVisible();
   }
+  await expect(page.getByRole("img", { name: "AIGS logo" }).first()).toBeVisible();
+  await expect(page.getByRole("img", { name: "Bellerophon logo" }).first()).toBeVisible();
+  // Logos load (they are real images, sent so a browser never runs them)
+  const src = await page.getByRole("img", { name: "AIGS logo" }).first().getAttribute("src");
+  const logo = await page.request.get(src!);
+  expect(logo.headers()["content-type"]).toBe("image/webp");
+  expect(logo.headers()["x-content-type-options"]).toBe("nosniff");
+});
+
+test("labs can be added with a logo, and edited", async ({ page }, testInfo) => {
+  const short = `Lab${testInfo.project.name.replace(/[^a-z0-9]/gi, "").slice(-12)}`;
+  await page.goto("/admin/types");
+  await page.getByRole("link", { name: "Labs and logos" }).click();
+  await expect(page.getByRole("heading", { name: "Labs" })).toBeVisible();
+  await expect(page.getByText("Asian Institute of Gemological Sciences")).toBeVisible();
+  await page.getByRole("link", { name: "Add lab" }).click();
+
+  await page.getByLabel("Full name").fill(`Test Gem Laboratory ${short}`);
+  await page.getByLabel("Short name").fill(short);
+  await page.getByLabel("Website (optional)").fill("http://not-https.example");
+  await page.locator("input[type=file]").setInputFiles({
+    name: "logo.png",
+    mimeType: "image/png",
+    buffer: png(short),
+  });
+  await expect(page.getByRole("img", { name: `${short} logo` })).toBeVisible();
+  await noSideScroll(page, "new lab");
+  await noViolations(page, "new lab");
+  await page.getByRole("button", { name: "Add lab" }).click();
+  await expect(page.getByText("Start the website with https://")).toBeVisible();
+  await page.getByLabel("Website (optional)").fill("");
+  await page.getByRole("button", { name: "Add lab" }).click();
+
+  await expect(page.getByText("Saved.")).toBeVisible();
+  const row = page.locator("li", { hasText: `Test Gem Laboratory ${short}` });
+  await expect(row.getByRole("img", { name: `${short} logo` })).toBeVisible();
+  await noSideScroll(page, "labs");
+
+  // The same short name can't be used twice
+  await page.goto("/admin/labs/new");
+  await page.getByLabel("Full name").fill("Another lab");
+  await page.getByLabel("Short name").fill(short);
+  await page.getByRole("button", { name: "Add lab" }).click();
+  await expect(page.getByText("Another lab already has this short name.")).toBeVisible();
 });
 
 test("a new type can be made with the wizard", async ({ page }, testInfo) => {
   const name = `E2E type ${testInfo.project.name}`;
   await page.goto("/admin/types/new");
 
-  // Step 1
+  // Step 1: choosing the lab and kind fills in the name, which can still be changed
+  await page.getByLabel("Lab", { exact: true }).selectOption({
+    label: "AIGS (Asian Institute of Gemological Sciences)",
+  });
+  await page.getByLabel("Kind of report").selectOption({ label: "Lot Wise Gem Stones Report" });
+  await expect(page.getByLabel("Type name")).toHaveValue("AIGS Lot Wise Gem Stones Report");
+  await expect(page.getByRole("img", { name: "AIGS logo" })).toBeVisible();
   await page.getByLabel("Type name").fill(name);
-  await page.getByLabel("Issuer / laboratory").fill("Test Lab");
   await noSideScroll(page, "wizard step 1");
   await page.getByRole("button", { name: "Next" }).click();
 
@@ -91,7 +140,7 @@ test("a certificate with a table can be added, checked, edited and deleted", asy
 }, testInfo) => {
   const ref = `C-${testInfo.project.name}`;
   await page.goto("/admin/certificates/new");
-  await page.getByRole("link", { name: /Bellerophon Gemmological Testing Results/ }).click();
+  await page.getByRole("link", { name: /Bellerophon Lot Wise Gem Stones Report/ }).click();
   await expect(page.getByRole("heading", { name: /Add Bellerophon/ })).toBeVisible();
 
   // Required field missing: the error shows and what was typed stays
@@ -129,11 +178,24 @@ test("a certificate with a table can be added, checked, edited and deleted", asy
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("3 gemstones tested.")).toBeVisible();
 
+  // The same reference number can't be stored twice
+  await page.goto("/admin/certificates/new");
+  await page.getByRole("link", { name: /Bellerophon Lot Wise Gem Stones Report/ }).click();
+  await page.getByLabel("Reference No *").fill(ref.toLowerCase());
+  await page.getByRole("button", { name: "Add certificate" }).click();
+  await expect(
+    page.getByText(new RegExp(`Report number ${ref.toLowerCase()} is already stored`)),
+  ).toBeVisible();
+  await expect(page.getByLabel("Reference No *")).toHaveValue(ref.toLowerCase());
+
   // It appears in the list, then is deleted
   await page.goto("/admin/certificates");
   await expect(page.getByText(ref).first()).toBeVisible();
   await noSideScroll(page, "certificate list");
-  await page.locator("li", { hasText: ref }).getByRole("link", { name: "Open" }).click();
+  await page
+    .locator("li", { hasText: ref })
+    .getByRole("link", { name: /^Details of/ })
+    .click();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete certificate" }).click();
   await expect(page).toHaveURL(/\/admin\/certificates$/);
@@ -155,16 +217,18 @@ test("scans are checked, stored privately, viewed, downloaded and removed", asyn
 }, testInfo) => {
   const tag = testInfo.project.name;
   await page.goto("/admin/certificates/new");
-  await page.getByRole("link", { name: /AIGS Analysis Short Report/ }).click();
+  await page.getByRole("link", { name: /AIGS Lot Wise Gem Stones Report/ }).click();
   await page.getByLabel("Report No *").fill(`F-${tag}`);
   await page.getByLabel("Identification *").fill("Natural Sapphire");
+  await page.getByLabel("Date of Issue").fill("2026-08-14");
   await page.getByRole("button", { name: "Add certificate" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
 
   const picker = page.locator("input[type=file]");
   const result = (name: string) => page.locator("li", { hasText: name });
 
-  // A real PDF and a real PNG are accepted
+  // A real PDF and a real PNG are accepted; the PNG is turned into a PDF first
+  const base = `F-${tag}_2026-08-14_AIGS`;
   await picker.setInputFiles([
     { name: `scan-${tag}.pdf`, mimeType: "application/pdf", buffer: pdf(tag) },
     { name: `photo-${tag}.png`, mimeType: "image/png", buffer: png(tag) },
@@ -172,6 +236,11 @@ test("scans are checked, stored privately, viewed, downloaded and removed", asyn
   await expect(result(`scan-${tag}.pdf`).getByText("Checked and saved.")).toBeVisible();
   await expect(result(`photo-${tag}.png`).getByText("Checked and saved.")).toBeVisible();
   await expect(page.getByRole("link", { name: "View", exact: true })).toHaveCount(2);
+  // Both are stored as PDFs named Report number_Date_Lab
+  await page.reload();
+  await expect(page.getByText(`${base}.pdf`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`${base}_2.pdf`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`uploaded as photo-${tag}.png`, { exact: false })).toBeVisible();
   await noSideScroll(page, "certificate with files");
 
   // A text file pretending to be a PDF, a PDF with a hidden script, and a duplicate are refused
@@ -201,7 +270,15 @@ test("scans are checked, stored privately, viewed, downloaded and removed", asyn
     await page.request.get(`${appStorage}/storage/v1/__test/objects`)
   ).json()) as string[];
   const certId = new URL(page.url()).pathname.split("/").pop()!;
-  expect(stored.filter((k) => k.includes(certId))).toHaveLength(2);
+  expect(stored.filter((k) => k.includes(certId)).sort()).toEqual([
+    `certificates/${certId}/${base}.pdf`,
+    `certificates/${certId}/${base}_2.pdf`,
+  ]);
+  // The photo arrived as a PDF
+  const photo = await page.request.get(
+    `${appStorage}/storage/v1/__test/object/certificates/${certId}/${base}_2.pdf`,
+  );
+  expect((await photo.body()).subarray(0, 5).toString()).toBe("%PDF-");
 
   // View goes through a short-lived signed link and returns the same bytes
   const href = await page
@@ -216,7 +293,7 @@ test("scans are checked, stored privately, viewed, downloaded and removed", asyn
   expect(Buffer.from(await body.body()).equals(pdf(tag))).toBe(true);
 
   const dl = await page.request.get(`${href}?download=1`, { maxRedirects: 0 });
-  expect(dl.headers()["location"]).toContain("download=");
+  expect(dl.headers()["location"]).toContain(`download=${encodeURIComponent(`${base}.pdf`)}`);
 
   // Signed-out visitors (and later, anyone without permission) get nothing
   const stranger = await browser.newContext({ storageState: { cookies: [], origins: [] } });
@@ -231,6 +308,14 @@ test("scans are checked, stored privately, viewed, downloaded and removed", asyn
   await page.getByRole("button", { name: "Remove", exact: true }).first().click();
   await expect(page.getByRole("link", { name: "View", exact: true })).toHaveCount(1);
   await expect(page.locator("label", { hasText: "Add PDF or scan" })).toBeVisible();
+  // The one left takes the plain name (no _2)
+  await expect(page.getByText(`${base}.pdf`, { exact: true })).toBeVisible();
+
+  // A new date renames the stored file to match
+  await page.getByLabel("Date of Issue").fill("2026-08-15");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await expect(page.getByText(`F-${tag}_2026-08-15_AIGS.pdf`, { exact: true })).toBeVisible();
   await noViolations(page, "certificate with files");
 });
 

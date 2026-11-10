@@ -5,7 +5,8 @@ import { db } from "./db";
 import { decide, LIMITS, shouldAutoBlockIp, type LimitDecision } from "./rate-limit-policy";
 import type { ClientInfo } from "./request";
 
-export type AttemptKind = "passkey" | "admin_password" | "email_code" | "totp" | "setup";
+export type AttemptKind =
+  "passkey" | "admin_password" | "email_code" | "totp" | "setup" | "upload_passkey";
 
 export async function isIpBlocked(ip: string | null): Promise<boolean> {
   if (!ip) return false;
@@ -28,8 +29,9 @@ export async function checkLimit(client: ClientInfo, email: string | null): Prom
     }[]
   >`
     select
-      count(*) filter (where email = ${email} and at > now() - interval '15 minutes')::int as email15m,
-      count(*) filter (where email = ${email})::int                                       as email1h,
+      count(*) filter (where email = ${email} and kind <> 'upload_passkey'
+                       and at > now() - interval '15 minutes')::int                       as email15m,
+      count(*) filter (where email = ${email} and kind <> 'upload_passkey')::int          as email1h,
       count(*) filter (where ip = ${client.ip} and at > now() - interval '15 minutes')::int as ip15m,
       count(*) filter (where ip = ${client.ip})::int                                      as ip1h,
       max(at) as last_failure_at

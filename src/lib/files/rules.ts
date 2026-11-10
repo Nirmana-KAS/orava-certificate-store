@@ -3,6 +3,13 @@
 export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB: a 300 dpi A4 scan is usually 1 to 5 MB
 export const MAX_FILES_PER_CERTIFICATE = 10;
 
+/**
+ * Every stored certificate is a PDF. Scans and phone photos (JPEG, PNG, WebP) can still be picked:
+ * the browser turns each one into a one-page PDF before it is sent, and storage only takes PDFs.
+ */
+export const STORE_AS_PDF = true;
+export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
 export const ALLOWED_TYPES = {
   "application/pdf": { kind: "pdf", ext: "pdf", label: "PDF" },
   "image/jpeg": { kind: "jpeg", ext: "jpg", label: "JPEG image" },

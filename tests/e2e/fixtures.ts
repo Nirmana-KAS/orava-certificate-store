@@ -14,6 +14,7 @@ export const E2E = {
     totpSecret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
   },
   staff: { email: "staff@example.com", name: "Test Staff" },
+  uploader: { email: "uploader@example.com", uploadPasskey: "K7QM-3XPA-W9RT-HC2D" },
   disabled: { email: "former@example.com" },
   passkey: "Shared-Passkey-2026",
   mailFile: join(import.meta.dirname, "..", "..", "test-results", "mail.jsonl"),

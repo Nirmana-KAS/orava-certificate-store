@@ -14,7 +14,12 @@ const SESSION_COOKIES = ["__Host-orava_session", "orava_session"];
 function needsSession(pathname: string): "admin" | "staff" | null {
   if (pathname.startsWith("/admin/login") || pathname.startsWith("/admin/setup")) return null;
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return "admin";
-  if (pathname.startsWith("/certificates")) return "staff";
+  if (
+    pathname.startsWith("/certificates") ||
+    pathname === "/upload" ||
+    pathname.startsWith("/upload/")
+  )
+    return "staff";
   return null;
 }
 

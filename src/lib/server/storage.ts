@@ -153,3 +153,10 @@ export async function removeObjects(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   await call("DELETE", `/object/${BUCKET}`, { json: { prefixes: paths } });
 }
+
+/** Renames one file inside the bucket. Fails if something already has the new name. */
+export async function moveObject(from: string, to: string): Promise<void> {
+  await call("POST", "/object/move", {
+    json: { bucketId: BUCKET, sourceKey: from, destinationKey: to },
+  });
+}

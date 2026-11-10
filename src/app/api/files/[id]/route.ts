@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { ALLOWED_TYPES } from "@/lib/files/rules";
+import { baseNameOf } from "@/lib/files/naming";
 import { audit } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { clientInfo } from "@/lib/server/request";
-import { getSession } from "@/lib/server/session";
+import { getSession, inUploadMode } from "@/lib/server/session";
 import { signedDownloadUrl } from "@/lib/server/storage";
-import { slugify } from "@/lib/types/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +19,17 @@ const notFound = () => new NextResponse("Not found", { status: 404, headers: noS
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  // Staff access (for those allowed to download) arrives with the staff pages in Phase 4
-  if (!session || session.user.role !== "admin") return notFound();
+  // Every signed-in person may open a live certificate's file. Saving it (?download=1) needs
+  // the Download permission, or the admin, or an uploader in upload mode.
+  if (!session) return notFound();
+  const isAdmin = session.user.role === "admin";
+  const download = request.nextUrl.searchParams.get("download") === "1";
+  if (download && !isAdmin && !session.user.canDownload && !inUploadMode(session)) {
+    return new NextResponse("You don't have permission to download files.", {
+      status: 403,
+      headers: noStore,
+    });
+  }
 
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return notFound();
@@ -29,20 +37,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const [file] = await db()<
     {
       storage_path: string;
-      mime: keyof typeof ALLOWED_TYPES;
       original_name: string;
       title: string;
       certificate_id: string;
     }[]
   >`
-    select f.storage_path, f.mime, f.original_name, c.title, c.id as certificate_id
+    select f.storage_path, f.original_name, c.title, c.id as certificate_id
     from certificate_files f join certificates c on c.id = f.certificate_id
-    where f.id = ${id} and f.status = 'ready' and c.deleted_at is null
+    where f.id = ${id} and f.status = 'ready'
+      -- a replaced certificate is kept as history, and its file can still be opened by the admin
+      and (c.deleted_at is null or (${isAdmin} and c.replaced_by is not null))
   `;
   if (!file) return notFound();
 
-  const download = request.nextUrl.searchParams.get("download") === "1";
-  const name = `${slugify(file.title)}.${ALLOWED_TYPES[file.mime]?.ext ?? "bin"}`;
+  // Saved as ReportNo_Date_Lab.pdf, the name it is stored under
+  const name = baseNameOf(file.storage_path);
   try {
     const url = await signedDownloadUrl(file.storage_path, 60, download ? name : undefined);
     await audit(

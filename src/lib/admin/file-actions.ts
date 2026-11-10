@@ -10,14 +10,16 @@ import {
   ALLOWED_TYPES,
   MAX_FILE_BYTES,
   MAX_FILES_PER_CERTIFICATE,
+  STORE_AS_PDF,
   cleanFileName,
   formatBytes,
   isAllowedMime,
 } from "@/lib/files/rules";
 import { audit, securityEvent } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
+import { pathForNewFile, syncFileNames } from "@/lib/server/file-names";
 import { clientInfo } from "@/lib/server/request";
-import { requireAdmin } from "@/lib/server/session";
+import { requireEditor } from "@/lib/server/session";
 import {
   downloadObject,
   ensureBucket,
@@ -40,12 +42,18 @@ type Started =
 type Finished = { ok: true } | { ok: false; error: string };
 
 async function context() {
-  const session = await requireAdmin();
+  const session = await requireEditor();
   const client = await clientInfo();
   return { client, actor: { id: session.user.id, email: session.user.email } };
 }
 
-const page = (certId: string) => `/admin/certificates/${certId}`;
+/** Both places a certificate's page can be open: the admin's and the uploader's */
+function revalidateCertificate(certId: string) {
+  revalidatePath(`/admin/certificates/${certId}`);
+  revalidatePath(`/upload/certificates/${certId}`);
+  revalidatePath("/admin/certificates");
+  revalidatePath("/upload");
+}
 
 /** Removes uploads that were started more than an hour ago and never finished. */
 async function clearStale(certId: string) {
@@ -75,8 +83,8 @@ export async function startUploadAction(certId: string, file: unknown): Promise<
     return { ok: false, error: "Invalid upload." };
   const { name, type, size } = parsed.data;
 
-  if (!isAllowedMime(type))
-    return { ok: false, error: "Only PDF, JPEG, PNG or WebP files can be added." };
+  if (!isAllowedMime(type) || (STORE_AS_PDF && type !== "application/pdf"))
+    return { ok: false, error: "Only PDF files can be stored." };
   if (size > MAX_FILE_BYTES) {
     return {
       ok: false,
@@ -97,12 +105,12 @@ export async function startUploadAction(certId: string, file: unknown): Promise<
     return { ok: false, error: `A certificate can have up to ${MAX_FILES_PER_CERTIFICATE} files.` };
   }
 
-  // The stored name is random; the original name is only shown on screen
+  // Stored under the standard name ReportNo_Date_Lab; the original name is only shown on screen
   const fileId = randomUUID();
   const info = ALLOWED_TYPES[type];
-  const path = `${certId}/${fileId}.${info.ext}`;
 
   try {
+    const path = await pathForNewFile(certId, type);
     await ensureBucket();
     const uploadUrl = await signedUploadUrl(path);
     await db()`
@@ -216,14 +224,13 @@ export async function finishUploadAction(fileId: string): Promise<Finished> {
     kind: file.kind,
     bytes: stored.bytes.length,
   });
-  revalidatePath(page(file.certificate_id));
-  revalidatePath("/admin/certificates");
+  revalidateCertificate(file.certificate_id);
   return { ok: true };
 }
 
 /** Cleans up an upload the browser could not finish. */
 export async function cancelUploadAction(fileId: string): Promise<void> {
-  await requireAdmin();
+  await requireEditor();
   if (!uuid.safeParse(fileId).success) return;
   const [file] = await db()<{ id: string; storage_path: string }[]>`
     delete from certificate_files where id = ${fileId} and status = 'pending'
@@ -243,9 +250,10 @@ export async function removeFileAction(fileId: string): Promise<void> {
   if (!file) return;
   await removeObjects([file.storage_path]);
   await db()`delete from certificate_files where id = ${fileId}`;
+  // Close the gap in the numbering (_2, _3…)
+  await syncFileNames(file.certificate_id).catch((e) => console.error("rename after remove", e));
   await audit(actor, "file.remove", client, file.original_name, {
     certificate: file.certificate_id,
   });
-  revalidatePath(page(file.certificate_id));
-  revalidatePath("/admin/certificates");
+  revalidateCertificate(file.certificate_id);
 }

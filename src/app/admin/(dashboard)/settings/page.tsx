@@ -8,10 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { setDeviceCodeAction, setLockdownAction, signOutEveryoneAction } from "@/lib/admin/actions";
 import { formatDateTime } from "@/lib/format";
 import { getSettings } from "@/lib/server/settings";
+import { requireAdmin } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
+  await requireAdmin();
   const settings = await getSettings();
 
   return (

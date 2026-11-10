@@ -55,6 +55,11 @@ const server = createServer(async (req, res) => {
 
   // Test helper: list stored object keys
   if (path === "/__test/objects") return send(res, 200, [...objects.keys()]);
+  const peek = path.match(/^\/__test\/object\/(.+)$/);
+  if (peek) {
+    const obj = objects.get(peek[1]!);
+    return obj ? send(res, 200, obj.bytes) : notFound(res, "Object");
+  }
 
   // Signed links work without the key (that is their point)
   let m = path.match(/^\/object\/upload\/sign\/([^/]+)\/(.+)$/);
@@ -127,6 +132,19 @@ const server = createServer(async (req, res) => {
     const token = randomUUID();
     readTokens.set(token, { key, expires: Date.now() + expiresIn * 1000 });
     return send(res, 200, { signedURL: `/object/sign/${m[1]}/${m[2]}?token=${token}` });
+  }
+  if (path === "/object/move" && req.method === "POST") {
+    const { bucketId, sourceKey, destinationKey } = JSON.parse(
+      (await readBody(req)).toString(),
+    ) as { bucketId: string; sourceKey: string; destinationKey: string };
+    const from = `${bucketId}/${sourceKey}`;
+    const to = `${bucketId}/${destinationKey}`;
+    const obj = objects.get(from);
+    if (!obj) return notFound(res, "Object");
+    if (objects.has(to)) return send(res, 400, { statusCode: "409", error: "Duplicate" });
+    objects.set(to, obj);
+    objects.delete(from);
+    return send(res, 200, { message: "Successfully moved" });
   }
   m = path.match(/^\/object\/([^/]+)$/);
   if (m && req.method === "DELETE") {

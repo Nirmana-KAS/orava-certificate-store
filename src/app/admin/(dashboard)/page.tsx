@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { actionLabel, formatDateTime } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { getSettings } from "@/lib/server/settings";
+import { requireAdmin } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Admin overview" };
 
@@ -22,6 +23,7 @@ const severityVariant = {
 } as const;
 
 export default async function AdminOverviewPage() {
+  await requireAdmin();
   const sql = db();
   const [[stats], activity, events, settings] = await Promise.all([
     sql<Stats[]>`
