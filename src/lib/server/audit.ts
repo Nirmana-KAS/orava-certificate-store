@@ -19,9 +19,10 @@ export async function audit(
 ): Promise<void> {
   try {
     await db()`
-      insert into audit_logs (actor_id, actor_email, action, target, ip, user_agent, meta)
+      insert into audit_logs (actor_id, actor_email, action, target, ip, user_agent, meta, client)
       values (${actor?.id ?? null}, ${actor?.email ?? null}, ${action}, ${target ?? null},
-              ${client.ip}, ${client.userAgent}, ${db().json(meta as postgres.JSONValue)})
+              ${client.ip}, ${client.userAgent}, ${db().json(meta as postgres.JSONValue)},
+              ${db().json((client.meta ?? {}) as postgres.JSONValue)})
     `;
   } catch (error) {
     console.error("audit log failed", error);

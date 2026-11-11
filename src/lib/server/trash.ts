@@ -50,6 +50,32 @@ export async function trashCount(): Promise<number> {
   return row?.n ?? 0;
 }
 
+/** Certificates moved to the Trash since the admin last opened it (for the Overview banner). */
+export async function newInTrash(): Promise<number> {
+  const [row] = await db()<{ n: number }[]>`
+    select count(*)::int as n from certificates c
+    where c.deleted_at is not null and c.replaced_by is null
+      and c.deleted_at > coalesce((select trash_seen_at from app_settings where id = true),
+                                  '-infinity'::timestamptz)
+  `;
+  return row?.n ?? 0;
+}
+
+/**
+ * Notes that the admin has seen the Trash. Only written when something new is there, so
+ * opening the page again changes nothing (and doesn't make open pages reload).
+ */
+export async function markTrashSeen(): Promise<void> {
+  await db()`
+    update app_settings set trash_seen_at = now()
+    where id = true and exists (
+      select 1 from certificates
+      where deleted_at is not null and replaced_by is null
+        and deleted_at > coalesce(app_settings.trash_seen_at, '-infinity'::timestamptz)
+    )
+  `;
+}
+
 /** The date a deleted certificate (or a kept earlier version) will be erased. */
 export function eraseDate(deletedAt: Date): Date {
   return new Date(new Date(deletedAt).getTime() + TRASH_DAYS * 86_400_000);

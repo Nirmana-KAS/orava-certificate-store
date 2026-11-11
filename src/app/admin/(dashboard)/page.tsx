@@ -10,7 +10,7 @@ import { actionLabel, formatDateTime } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { backupDue, backupSummary } from "@/lib/server/backup";
 import { getSettings } from "@/lib/server/settings";
-import { trashCount } from "@/lib/server/trash";
+import { newInTrash } from "@/lib/server/trash";
 import { requireAdmin } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Admin overview" };
@@ -57,7 +57,7 @@ export default async function AdminOverviewPage() {
     `,
     getSettings(),
     backupSummary(),
-    trashCount(),
+    newInTrash(),
   ]);
 
   const tiles = [
@@ -76,16 +76,18 @@ export default async function AdminOverviewPage() {
           Lockdown is on. Staff can&apos;t sign in until you turn it off in Settings.
         </Alert>
       ) : null}
-      {backupDue(backup) ? (
+      {settings.backupRemindBanner && backupDue(backup, settings.backupRemindDays) ? (
         <Alert variant="warning" className="mb-6">
-          {backup.lastBackup ? "No backup in the last 7 days. " : "No backup has been made yet. "}
+          {backup.lastBackup
+            ? `No backup in the last ${settings.backupRemindDays === 1 ? "day" : `${settings.backupRemindDays} days`}. `
+            : "No backup has been made yet. "}
           <Link href="/admin/backup">Download a backup</Link>
         </Alert>
       ) : null}
       {trash > 0 ? (
         <Alert className="mb-6">
-          {trash} deleted certificate{trash === 1 ? " is" : "s are"} in the Trash.{" "}
-          <Link href="/admin/trash">Review the Trash</Link>
+          {trash} certificate{trash === 1 ? " was" : "s were"} deleted since you last looked at the
+          Trash. <Link href="/admin/trash">Review the Trash</Link>
         </Alert>
       ) : null}
 

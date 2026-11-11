@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import type postgres from "postgres";
 
 import { COOKIES, cookieOptions } from "./cookies";
 import { hmac, randomToken } from "./crypto";
@@ -49,10 +50,12 @@ export async function createSession(
       : settings.sessionHours;
 
   await db()`
-    insert into sessions (token_hash, user_id, role, passkey_version, ip, user_agent, country, expires_at)
+    insert into sessions (token_hash, user_id, role, passkey_version, ip, user_agent, country, client,
+                          expires_at)
     values (${hmac(env().AUTH_SECRET, token)}, ${user.id}, ${user.role},
             ${user.role === "viewer" ? settings.passkeyVersion : null},
             ${client.ip}, ${client.userAgent}, ${client.country},
+            ${db().json((client.meta ?? {}) as postgres.JSONValue)},
             now() + make_interval(hours => ${hours}))
   `;
   await db()`update app_users set last_login_at = now() where id = ${user.id}`;

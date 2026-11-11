@@ -63,6 +63,7 @@ const actionLabels: Record<string, string> = {
   "settings.device_code": "Changed new-device codes",
   "settings.session_hours": "Changed sign-in length",
   "settings.sign_out_everyone": "Signed out all staff",
+  "settings.backup_reminder": "Changed backup reminders",
   "certificate.create": "Added a certificate",
   "certificate.update": "Edited a certificate",
   "certificate.delete": "Moved a certificate to the Trash",

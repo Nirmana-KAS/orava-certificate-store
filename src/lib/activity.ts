@@ -73,3 +73,83 @@ export function kindPatterns(kind: Kind): string[] {
 export function containsPattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, "\\$&")}%`;
 }
+
+// ── Details saved with an entry, in plain words ────────────────────────────────────
+
+const LABELS: Record<string, string> = {
+  rows: "Database rows",
+  bytes: "Size",
+  files: "Files",
+  missing: "Files that couldn't be read",
+  withFiles: "Files included",
+  certificates: "Certificates",
+  versions: "Earlier versions",
+  titles: "Certificates",
+  total: "Matching entries",
+  filters: "Filters",
+  format: "File type",
+  on: "Turned on",
+  hours: "Hours",
+  banner: "Banner",
+  email: "Email",
+  complete: "Finished",
+  fields: "Fields",
+  confidence: "Reading confidence",
+  page: "Page",
+  who: "Person",
+  kind: "Kind",
+  q: "Search words",
+  from: "From",
+  to: "To",
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function humanKey(k: string): string {
+  if (LABELS[k]) return LABELS[k];
+  const words = k
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll("_", " ")
+    .toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function sizeText(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function valueText(key: string, v: unknown): string {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (typeof v === "number") {
+    if (key === "bytes") return sizeText(v);
+    return v.toLocaleString("en-GB");
+  }
+  if (typeof v === "string") return UUID.test(v) ? "" : v;
+  if (Array.isArray(v)) {
+    return v
+      .map((x) => valueText(key, x))
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>)
+      .map(([k, x]) => {
+        const t = valueText(k, x);
+        return t ? `${humanKey(k)} ${t}` : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+  return String(v);
+}
+
+/** The extra details saved with an entry, as label and value, leaving out internal ids. */
+export function metaDetails(meta: Record<string, unknown> | null | undefined) {
+  return Object.entries(meta ?? {})
+    .map(([k, v]) => ({ label: humanKey(k), value: valueText(k, v) }))
+    .filter((d) => d.value !== "");
+}

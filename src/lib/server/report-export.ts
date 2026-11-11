@@ -7,6 +7,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import { SORTS, type Filters } from "@/lib/certificates/filters";
 import { CATEGORY_LABELS } from "@/lib/labs";
 import { caratsText, cellText, COLUMNS, GROUPS, type Report } from "@/lib/reports/report";
+import { xlsxParts, type XRow } from "@/lib/xlsx";
 
 import { csvCell } from "./csv";
 import type { FilterOptions } from "./search";
@@ -81,19 +82,6 @@ export function reportCsv(r: Report): Buffer {
 
 // ── Excel (.xlsx) ──────────────────────────────────────────────────────────────────
 
-const xml = (s: string) =>
-  s
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
-const colName = (i: number) =>
-  i < 26 ? String.fromCharCode(65 + i) : `A${String.fromCharCode(65 + i - 26)}`;
-
-type Cell = { text: string } | { num: number };
-
 /** A zip file (the .xlsx container) from a few named files. */
 function zip(files: { name: string; data: Buffer }[]): Buffer {
   const parts: Buffer[] = [];
@@ -143,22 +131,20 @@ function zip(files: { name: string; data: Buffer }[]): Buffer {
 
 export function reportXlsx(r: Report, info: ExportInfo): Buffer {
   const cols = r.options.columns;
-  const rows: { cells: Cell[]; bold?: boolean }[] = [];
-  rows.push({ cells: [{ text: r.options.title }], bold: true });
-  rows.push({ cells: [{ text: `Made ${stamp(info.generatedAt)} by ${info.generatedBy}` }] });
-  rows.push({ cells: [{ text: info.filters.join(" · ") }] });
+  const rows: XRow[] = [];
+  rows.push({ cells: [r.options.title], bold: true });
+  rows.push({ cells: [`Made ${stamp(info.generatedAt)} by ${info.generatedBy}`] });
+  rows.push({ cells: [info.filters.join(" · ")] });
   rows.push({
-    cells: [{ text: `${r.count} certificate${r.count === 1 ? "" : "s"}, ${caratsText(r.carats)}` }],
+    cells: [`${r.count} certificate${r.count === 1 ? "" : "s"}, ${caratsText(r.carats)}`],
   });
   rows.push({ cells: [] });
-  rows.push({ cells: cols.map((c) => ({ text: COLUMNS[c] })), bold: true });
+  rows.push({ cells: cols.map((c) => COLUMNS[c]), bold: true });
   for (const g of r.groups) {
     if (r.options.group !== "none") {
       rows.push({
         cells: [
-          {
-            text: `${g.label}: ${g.count} certificate${g.count === 1 ? "" : "s"}, ${caratsText(g.carats)}`,
-          },
+          `${g.label}: ${g.count} certificate${g.count === 1 ? "" : "s"}, ${caratsText(g.carats)}`,
         ],
         bold: true,
       });
@@ -167,68 +153,19 @@ export function reportXlsx(r: Report, info: ExportInfo): Buffer {
       rows.push({
         cells: cols.map((c) =>
           c === "weight" && row.weight !== null
-            ? { num: row.weight }
+            ? row.weight
             : c === "files"
-              ? { num: row.files }
-              : { text: cellText(row, c) },
+              ? row.files
+              : cellText(row, c),
         ),
       });
     }
   }
-
-  const sheetRows = rows
-    .map((row, i) => {
-      const cells = row.cells
-        .map((cell, j) => {
-          const ref = `${colName(j)}${i + 1}`;
-          const style = row.bold ? ' s="1"' : "";
-          return "num" in cell
-            ? `<c r="${ref}"${style}><v>${cell.num}</v></c>`
-            : `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${xml(cell.text)}</t></is></c>`;
-        })
-        .join("");
-      return `<row r="${i + 1}">${cells}</row>`;
-    })
-    .join("");
-  const widths = cols
-    .map((c, j) => {
-      const w =
-        c === "summary" ? 60 : c === "type" ? 36 : c === "weight" || c === "files" ? 10 : 20;
-      return `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`;
-    })
-    .join("");
-
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths}</cols><sheetData>${sheetRows}</sheetData></worksheet>`;
-  const files = [
-    {
-      name: "[Content_Types].xml",
-      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
-    },
-    {
-      name: "_rels/.rels",
-      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    },
-    {
-      name: "xl/workbook.xml",
-      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Report" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-    },
-    {
-      name: "xl/_rels/workbook.xml.rels",
-      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    },
-    {
-      name: "xl/styles.xml",
-      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
-    },
-    { name: "xl/worksheets/sheet1.xml", data: sheet },
-  ];
-  return zip(files.map((f) => ({ name: f.name, data: Buffer.from(f.data, "utf8") })));
+  const widths = cols.map((c) =>
+    c === "summary" ? 60 : c === "type" ? 36 : c === "weight" || c === "files" ? 10 : 20,
+  );
+  const parts = xlsxParts([{ name: "Report", rows, widths, freezeRows: 6 }]);
+  return zip(parts.map((f) => ({ name: f.name, data: Buffer.from(f.data, "utf8") })));
 }
 
 // ── PDF ──────────────────────────────────────────────────────────────────────────

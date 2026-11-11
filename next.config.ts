@@ -9,6 +9,9 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // Ask Chrome and Edge for the real system version (tells Windows 11 from 10, shows the Android
+  // version) and the phone model, for the activity log. Other browsers just ignore it.
+  { key: "Accept-CH", value: "Sec-CH-UA-Platform-Version, Sec-CH-UA-Model" },
 ];
 
 const nextConfig: NextConfig = {

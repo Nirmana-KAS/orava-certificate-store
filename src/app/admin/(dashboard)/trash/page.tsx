@@ -17,7 +17,14 @@ import { audit } from "@/lib/server/audit";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { clientInfo } from "@/lib/server/request";
 import { requireAdmin } from "@/lib/server/session";
-import { TRASH_DAYS, daysLeft, eraseDate, eraseExpired, trashItems } from "@/lib/server/trash";
+import {
+  TRASH_DAYS,
+  daysLeft,
+  eraseDate,
+  eraseExpired,
+  markTrashSeen,
+  trashItems,
+} from "@/lib/server/trash";
 
 export const metadata: Metadata = { title: "Trash" };
 
@@ -53,6 +60,8 @@ export default async function TrashPage({
     );
   }
   const items = await trashItems();
+  // The Overview stops mentioning these until something new is deleted
+  await markTrashSeen().catch((e) => console.error("trash seen failed", e));
   const restored = one(params.restored);
   const erased = one(params.erased);
   const error = errors[one(params.error) ?? ""];

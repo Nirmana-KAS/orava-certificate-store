@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AddUserForm } from "@/components/admin/add-user-form";
 import { IssueUploadPasskey } from "@/components/admin/uploader-controls";
+import { Facts, PlaceLink } from "@/components/admin/client-facts";
 import { PageHeader } from "@/components/admin/page-header";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import {
   signOutUserAction,
   stopUploaderAction,
 } from "@/lib/admin/actions";
+import { describeDevice, type ClientMeta } from "@/lib/client-info";
 import { formatDateTime } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/session";
@@ -34,6 +36,9 @@ type Row = {
   in_upload_mode: boolean;
   last_login_at: Date | null;
   sessions: number;
+  last_ip: string | null;
+  last_ua: string | null;
+  last_client: ClientMeta | null;
 };
 
 export default async function UsersPage() {
@@ -45,8 +50,14 @@ export default async function UsersPage() {
         where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()
           and s.upload_until > now()) as in_upload_mode,
       (select count(*)::int from sessions s
-        where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()) as sessions
+        where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()) as sessions,
+      l.ip as last_ip, l.user_agent as last_ua, l.client as last_client
     from app_users u
+    left join lateral (
+      select a.ip, a.user_agent, a.client from audit_logs a
+      where a.actor_id = u.id and a.action in ('sign_in', 'admin.sign_in')
+      order by a.at desc limit 1
+    ) l on true
     where u.role = 'viewer'
     order by u.status, u.email
   `;
@@ -101,15 +112,42 @@ export default async function UsersPage() {
                       {u.in_upload_mode ? <Badge variant="success">In upload mode</Badge> : null}
                       {u.sessions > 0 ? <Badge>Signed in ({u.sessions})</Badge> : null}
                     </div>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Last sign-in: {formatDateTime(u.last_login_at)} ·{" "}
+                    <div className="mt-3 grid gap-1">
+                      <p className="text-sm font-medium">Last sign-in</p>
+                      <Facts
+                        facts={[
+                          { label: "When", value: formatDateTime(u.last_login_at) },
+                          ...(u.last_login_at
+                            ? (() => {
+                                const d = u.last_ua
+                                  ? describeDevice(u.last_ua, u.last_client)
+                                  : null;
+                                return [
+                                  {
+                                    label: "Location",
+                                    value: (
+                                      <PlaceLink
+                                        ip={u.last_ip}
+                                        meta={u.last_client}
+                                        label={`last sign-in of ${u.email}`}
+                                      />
+                                    ),
+                                  },
+                                  ...(d
+                                    ? [{ label: "Using", value: `${d.browser} on ${d.system}` }]
+                                    : []),
+                                ];
+                              })()
+                            : []),
+                        ]}
+                      />
                       <Link
                         href={`/admin/activity?who=${encodeURIComponent(u.email)}`}
-                        className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
+                        className="inline-flex min-h-11 items-center justify-self-start text-sm text-primary underline-offset-4 hover:underline"
                       >
-                        Activity<span className="sr-only"> of {u.email}</span>
+                        All activity<span className="sr-only"> of {u.email}</span>
                       </Link>
-                    </p>
+                    </div>
                     {u.can_upload && u.upload_locked_at ? (
                       <p className="mt-1 text-sm text-destructive">
                         Locked after 5 wrong upload passkeys on {formatDateTime(u.upload_locked_at)}

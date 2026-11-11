@@ -152,11 +152,13 @@ export async function backupSummary(): Promise<BackupSummary> {
   };
 }
 
-/** A backup is due when there is something to keep and none was made in the last 7 days. */
-export const BACKUP_EVERY_DAYS = 7;
-
-export function backupDue(s: BackupSummary, now = new Date()): boolean {
+/**
+ * A backup is due when there is something to keep and none was made in the last `everyDays`
+ * days. With 0 (reminders turned off) it is never due.
+ */
+export function backupDue(s: BackupSummary, everyDays: number, now = new Date()): boolean {
+  if (everyDays <= 0) return false;
   if (s.certificates + s.trash === 0) return false;
   if (!s.lastBackup) return true;
-  return now.getTime() - new Date(s.lastBackup.at).getTime() > BACKUP_EVERY_DAYS * 86_400_000;
+  return now.getTime() - new Date(s.lastBackup.at).getTime() > everyDays * 86_400_000;
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 
+import { Facts, clientFacts } from "@/components/admin/client-facts";
 import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import {
   ACTIVITY_PAGE_SIZE,
   KINDS,
   activityHref,
+  metaDetails,
   parseActivityFilters,
   type Kind,
 } from "@/lib/activity";
@@ -22,20 +24,6 @@ import { requireAdmin } from "@/lib/server/session";
 export const metadata: Metadata = { title: "Activity log" };
 
 const BASE = "/admin/activity";
-
-/** The details saved with an entry, as short "name: value" lines. */
-function details(meta: Record<string, unknown>): string[] {
-  return Object.entries(meta ?? {})
-    .filter(([, v]) => v !== null && v !== undefined && v !== "")
-    .map(([k, v]) => {
-      const value = Array.isArray(v)
-        ? v.join(", ")
-        : typeof v === "object"
-          ? JSON.stringify(v)
-          : String(v);
-      return `${k.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ")}: ${value}`;
-    });
-}
 
 export default async function ActivityPage({
   searchParams,
@@ -146,18 +134,34 @@ export default async function ActivityPage({
       {rows.length > 0 ? (
         <ul className="grid gap-2" data-testid="activity">
           {rows.map((r) => {
-            const extra = details(r.meta);
+            const facts = [
+              {
+                label: "Person",
+                value: r.actor_email ? (
+                  <Link
+                    href={activityHref(BASE, { page: 1, who: r.actor_email })}
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {r.actor_email}
+                  </Link>
+                ) : (
+                  "System (automatic)"
+                ),
+              },
+              ...clientFacts(r.ip, r.user_agent, r.client),
+              ...metaDetails(r.meta),
+            ];
             return (
               <li key={r.id}>
                 <Card className="gap-2 py-3">
-                  <CardContent className="grid gap-1 text-sm sm:grid-cols-[11rem_1fr] sm:gap-x-4">
+                  <CardContent className="grid gap-2 text-sm sm:grid-cols-[11rem_1fr] sm:gap-x-4">
                     <time
                       dateTime={new Date(r.at).toISOString()}
                       className="text-muted-foreground tabular-nums"
                     >
                       {formatDateTime(r.at)}
                     </time>
-                    <div className="min-w-0">
+                    <div className="grid min-w-0 gap-2">
                       <p className="font-medium">
                         {actionLabel(r.action)}
                         {r.target ? (
@@ -167,37 +171,7 @@ export default async function ActivityPage({
                           </span>
                         ) : null}
                       </p>
-                      <p className="wrap-anywhere text-muted-foreground">
-                        {r.actor_email ? (
-                          <Link
-                            href={activityHref(BASE, { page: 1, who: r.actor_email })}
-                            className="underline-offset-4 hover:underline"
-                          >
-                            {r.actor_email}
-                          </Link>
-                        ) : (
-                          "System"
-                        )}
-                        {r.ip ? ` · ${r.ip}` : ""}
-                      </p>
-                      {extra.length > 0 || r.user_agent ? (
-                        <details className="mt-1">
-                          <summary className="inline-flex min-h-11 cursor-pointer items-center text-primary">
-                            Details
-                          </summary>
-                          <ul className="mt-1 grid gap-0.5 text-muted-foreground">
-                            {extra.map((d) => (
-                              <li key={d} className="wrap-anywhere">
-                                {d}
-                              </li>
-                            ))}
-                            {r.user_agent ? (
-                              <li className="wrap-anywhere">Browser: {r.user_agent}</li>
-                            ) : null}
-                            <li>Action code: {r.action}</li>
-                          </ul>
-                        </details>
-                      ) : null}
+                      <Facts facts={facts} />
                     </div>
                   </CardContent>
                 </Card>

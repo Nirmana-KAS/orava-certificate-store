@@ -7,7 +7,9 @@ import * as React from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { finishBackupAction, startBackupAction } from "@/lib/admin/backup-actions";
-import { browserDeflate, ZipWriter } from "@/lib/backup/zip";
+import { backupWorkbook, type BackupTables } from "@/lib/backup/workbook";
+import { browserDeflate, ZipWriter, type Deflate } from "@/lib/backup/zip";
+import { xlsxParts } from "@/lib/xlsx";
 import { formatBytes } from "@/lib/files/rules";
 
 type FileRef = { id: string; path: string; size: number; url: string | null };
@@ -65,13 +67,38 @@ function stamp(d: Date) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-const README = (when: Date, by: string, version: string, withFiles: boolean) =>
+/** The Excel workbook as bytes (an .xlsx file is itself a zip). */
+async function workbookBytes(
+  tables: BackupTables,
+  info: Parameters<typeof backupWorkbook>[1],
+  deflate: Deflate | undefined,
+): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  const book = new ZipWriter((c) => void chunks.push(c), deflate);
+  for (const part of xlsxParts(backupWorkbook(tables, info))) {
+    await book.add(part.name, part.data, { compress: true, date: info.at });
+  }
+  await book.finish();
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+
+const README = (when: Date, by: string, version: string, withFiles: boolean, book: string) =>
   [
     "Orava Certificate Store backup",
     "==============================",
     "",
     `Made ${when.toISOString()} by ${by}, app version ${version}.`,
     "",
+    `${book}`,
+    "                       Open in Excel to read everything as clear tables: all",
+    "                       certificates, one sheet per certificate type with every field,",
+    "                       files, staff, labs, types, the activity log and security events.",
     "database/<table>.json  every row of each table, as JSON (times in UTC).",
     "                       Lab logos are base64 text. Deleted certificates are included",
     "                       (deleted_at is set) so the Trash can be restored too.",
@@ -134,10 +161,10 @@ export function BackupPanel({
 
     setRunning(true);
     const chunks: Uint8Array[] = [];
-    const zip = new ZipWriter(
-      disk ? (c) => disk!.write(c) : (c) => void chunks.push(c),
-      browserDeflate(),
-    );
+    const deflate = browserDeflate();
+    const zip = new ZipWriter(disk ? (c) => disk!.write(c) : (c) => void chunks.push(c), deflate);
+    const tables: BackupTables = {};
+    const bookName = `orava-backup_${stamp(now)}.xlsx`;
     let rows = 0;
     let saved = 0;
     let savedBytes = 0;
@@ -166,12 +193,24 @@ export function BackupPanel({
           after = page.next;
         } while (after);
         counts[table] = all.length;
+        tables[table] = all as BackupTables[string];
         rows += all.length;
         await zip.add(`database/${table}.json`, JSON.stringify(all, null, 1), {
           compress: true,
           date: now,
         });
       }
+
+      setProgress({ label: "Excel workbook", done: 0, total: 1 });
+      await zip.add(
+        bookName,
+        await workbookBytes(
+          tables,
+          { at: now, by: start.by, version: start.version, withFiles },
+          deflate,
+        ),
+        { date: now },
+      );
 
       if (withFiles) {
         let after: string | null = null;
@@ -219,7 +258,9 @@ export function BackupPanel({
         ),
         { date: now },
       );
-      await zip.add("README.txt", README(now, start.by, start.version, withFiles), { date: now });
+      await zip.add("README.txt", README(now, start.by, start.version, withFiles, bookName), {
+        date: now,
+      });
       await zip.finish();
 
       if (disk) await disk.close();

@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { Archive, FileStack, History, Trash2 } from "lucide-react";
 
 import { BackupPanel } from "@/components/admin/backup-panel";
+import { BackupReminderForm } from "@/components/admin/backup-reminder-form";
 import { PageHeader } from "@/components/admin/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/files/rules";
 import { formatDateTime } from "@/lib/format";
-import { BACKUP_EVERY_DAYS, backupDue, backupSummary } from "@/lib/server/backup";
+import { remindLabel } from "@/lib/backup/reminders";
+import { backupDue, backupSummary } from "@/lib/server/backup";
+import { getSettings } from "@/lib/server/settings";
 import { requireAdmin } from "@/lib/server/session";
 import { storageConfigured } from "@/lib/server/storage";
 
@@ -15,8 +18,9 @@ export const metadata: Metadata = { title: "Backup" };
 
 export default async function BackupPage() {
   await requireAdmin();
-  const s = await backupSummary();
-  const due = backupDue(s);
+  const [s, settings] = await Promise.all([backupSummary(), getSettings()]);
+  const every = settings.backupRemindDays;
+  const due = backupDue(s, every);
 
   const tiles = [
     { label: "Certificates", value: s.certificates.toLocaleString("en-GB"), icon: FileStack },
@@ -29,13 +33,13 @@ export default async function BackupPage() {
     <>
       <PageHeader
         title="Backup"
-        description="The free database has no automatic backups. Download a copy of everything to your computer once a week."
+        description="The free database has no automatic backups. Download a copy of everything to your computer regularly."
       />
 
       {due ? (
         <Alert variant="warning" className="mb-6">
           {s.lastBackup
-            ? `The last backup was more than ${BACKUP_EVERY_DAYS} days ago. Download a new one now.`
+            ? `The last backup was more than ${every === 1 ? "a day" : `${every} days`} ago. Download a new one now.`
             : "No backup has been made yet. Download one now."}
         </Alert>
       ) : null}
@@ -71,6 +75,26 @@ export default async function BackupPage() {
         </CardContent>
       </Card>
 
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Backup reminder</CardTitle>
+          <CardDescription>
+            Now: <span data-testid="remind-now">{remindLabel(every)}</span>
+            {every > 0
+              ? `, by ${[settings.backupRemindBanner ? "banner" : null, settings.backupRemindEmail ? "email" : null].filter(Boolean).join(" and ") || "nothing (both off)"}`
+              : ""}
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BackupReminderForm
+            days={every}
+            banner={settings.backupRemindBanner}
+            email={settings.backupRemindEmail}
+          />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>About backups</CardTitle>
@@ -78,8 +102,9 @@ export default async function BackupPage() {
         <CardContent className="grid gap-3 text-sm">
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              One zip file with every table of the database (as JSON) and every certificate file
-              under its stored name. Certificates in the Trash are included too.
+              One zip file with an Excel workbook to read everything at a glance (certificates, one
+              sheet per type, files, staff, activity), every table of the database as JSON for a
+              full restore, and every certificate file. Certificates in the Trash are included too.
             </li>
             <li>
               Passwords, passkeys, the authenticator secret and sign-ins are left out on purpose.
@@ -95,8 +120,8 @@ export default async function BackupPage() {
               and delete old copies you no longer need.
             </li>
             <li>
-              Every backup is in the Activity log. If none is made for {BACKUP_EVERY_DAYS} days, a
-              reminder is emailed to the alert address.
+              Every backup is in the Activity log. Choose above how often you are reminded, and
+              whether by a banner, an email or both.
             </li>
           </ul>
         </CardContent>

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { ClientMeta } from "@/lib/client-info";
 import { containsPattern, kindPatterns, type ActivityFilters } from "@/lib/activity";
 
 import { db } from "./db";
@@ -13,6 +14,7 @@ export type ActivityRow = {
   ip: string | null;
   user_agent: string | null;
   meta: Record<string, unknown>;
+  client: ClientMeta | null;
 };
 
 /** One page (or, for the CSV, up to `limit` rows) of the activity log, newest first. */
@@ -39,7 +41,7 @@ export async function findActivity(
   `;
   const [rows, [count]] = await Promise.all([
     sql<ActivityRow[]>`
-      select id::text, at, actor_email, action, target, ip, user_agent, meta
+      select id::text, at, actor_email, action, target, ip, user_agent, meta, client
       from audit_logs ${where}
       order by at desc, id desc
       limit ${limit} offset ${offset}
