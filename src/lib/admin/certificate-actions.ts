@@ -118,12 +118,13 @@ export async function saveCertificateAction(
 
 /** Soft delete: the record is hidden, not erased. */
 export async function deleteCertificateAction(certId: string): Promise<void> {
-  // Uploaders may delete too; only the admin can bring a deleted certificate back (Phase 5)
+  // Uploaders may delete too; it goes to the Trash for 30 days, and only the admin can bring
+  // it back from there
   const session = await requireEditor();
   const client = await clientInfo();
   if (!uuid.safeParse(certId).success) return;
   const [row] = await db()<{ title: string }[]>`
-    update certificates set deleted_at = now(), updated_at = now()
+    update certificates set deleted_at = now(), deleted_by = ${session.user.id}, updated_at = now()
     where id = ${certId} and deleted_at is null returning title
   `;
   if (!row) return;
@@ -134,8 +135,9 @@ export async function deleteCertificateAction(certId: string): Promise<void> {
     row.title,
   );
   revalidatePath("/admin/certificates");
+  revalidatePath("/admin/trash");
   revalidatePath("/upload/certificates");
-  redirect(session.area === "admin" ? "/admin/certificates" : "/upload");
+  redirect(session.area === "admin" ? "/admin/certificates?deleted=1" : "/upload?deleted=1");
 }
 
 /**

@@ -149,6 +149,22 @@ export async function signedDownloadUrl(
   return `${c.base}${data.signedURL}${extra}`;
 }
 
+/** Links to many files at once (one storage call), each working for `seconds`. */
+export async function signedDownloadUrls(
+  paths: string[],
+  seconds: number,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (paths.length === 0) return out;
+  const c = config()!;
+  const res = await call("POST", `/object/sign/${BUCKET}`, {
+    json: { expiresIn: seconds, paths },
+  });
+  const data = (await res.json()) as { path?: string; signedURL?: string | null }[];
+  for (const d of data) if (d.path && d.signedURL) out.set(d.path, `${c.base}${d.signedURL}`);
+  return out;
+}
+
 export async function removeObjects(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   await call("DELETE", `/object/${BUCKET}`, { json: { prefixes: paths } });

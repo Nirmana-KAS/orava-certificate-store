@@ -28,6 +28,9 @@ const schema = z.object({
   SMTP_APP_PASSWORD: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  // Scheduled jobs (/api/cron/daily): Vercel Cron sends it as "Authorization: Bearer …",
+  // cron-job.org in the x-cron-secret header
+  CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters").optional(),
   // Test-only: write emails to a JSON file instead of sending (refused on Vercel)
   MAIL_FILE: z.string().optional(),
 });

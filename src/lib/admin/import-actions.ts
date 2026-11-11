@@ -185,7 +185,7 @@ export async function discardImportAction(certId: string): Promise<void> {
   const client = await clientInfo();
   const row = await db().begin(async (tx) => {
     const [taken] = await tx<{ title: string }[]>`
-      update certificates set deleted_at = now(), updated_at = now()
+      update certificates set deleted_at = now(), deleted_by = ${session.user.id}, updated_at = now()
       where id = ${certId} and deleted_at is null and created_by = ${session.user.id}
         and created_at > now() - interval '30 minutes'
         and extraction is not null

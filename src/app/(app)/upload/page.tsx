@@ -5,6 +5,7 @@ import { FilePlus2, Lock, ScanText, ShieldCheck } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CertificateSearch } from "@/components/certificates/certificate-search";
@@ -59,7 +60,8 @@ export default async function UploadHome({
   // Keeps upload mode on for another 30 minutes, like every other upload page
   const active = await requireUploadModePage();
 
-  const filters = parseFilters(await searchParams);
+  const params = await searchParams;
+  const filters = parseFilters(params);
 
   return (
     <>
@@ -82,6 +84,11 @@ export default async function UploadHome({
         </form>
       </div>
       <UploadNav />
+      {params.deleted ? (
+        <Alert variant="success" className="mb-6">
+          Deleted. It is kept in the Trash for 30 days, and only the admin can bring it back.
+        </Alert>
+      ) : null}
       <div className="mb-6 flex flex-wrap gap-3">
         <Button asChild size="lg" className="w-full sm:w-auto">
           <Link href="/upload/import">

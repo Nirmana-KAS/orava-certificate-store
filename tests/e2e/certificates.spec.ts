@@ -198,7 +198,8 @@ test("a certificate with a table can be added, checked, edited and deleted", asy
     .click();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Delete certificate" }).click();
-  await expect(page).toHaveURL(/\/admin\/certificates$/);
+  await expect(page).toHaveURL(/\/admin\/certificates\?deleted=1$/);
+  await expect(page.getByText("Moved to the Trash.")).toBeVisible();
   await expect(page.getByText(ref)).toHaveCount(0);
 });
 

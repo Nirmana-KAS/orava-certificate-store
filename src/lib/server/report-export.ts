@@ -8,6 +8,7 @@ import { SORTS, type Filters } from "@/lib/certificates/filters";
 import { CATEGORY_LABELS } from "@/lib/labs";
 import { caratsText, cellText, COLUMNS, GROUPS, type Report } from "@/lib/reports/report";
 
+import { csvCell } from "./csv";
 import type { FilterOptions } from "./search";
 
 // Turns a report into a file: CSV (any spreadsheet), Excel (.xlsx) or PDF with the Orava logo.
@@ -55,12 +56,6 @@ export function fileNameFor(title: string, ext: string, at: Date): string {
 }
 
 // ── CSV ──────────────────────────────────────────────────────────────────────────
-
-/** A spreadsheet can't run a cell typed as =, +, - or @ when it is opened. */
-function csvCell(v: string): string {
-  const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
-  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
 
 export function reportCsv(r: Report): Buffer {
   const cols = r.options.columns;

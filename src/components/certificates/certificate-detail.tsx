@@ -15,10 +15,11 @@ import { LabLogo } from "@/components/admin/lab-logo";
 import { baseNameOf, nameIsIncomplete } from "@/lib/files/naming";
 import { namePartsFor } from "@/lib/server/file-names";
 import { removeFileAction } from "@/lib/admin/file-actions";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { MAX_FILES_PER_CERTIFICATE, formatBytes } from "@/lib/files/rules";
 import { db } from "@/lib/server/db";
 import { storageConfigured } from "@/lib/server/storage";
+import { TRASH_DAYS, eraseDate } from "@/lib/server/trash";
 import type { EditorArea } from "@/lib/server/session";
 import { getType } from "@/lib/server/types";
 import type { EntryData } from "@/lib/types/entry";
@@ -81,11 +82,12 @@ export async function CertificateDetail({
       id: string;
       title: string;
       replaced_at: Date | null;
+      deleted_at: Date;
       created_at: Date;
       file_id: string | null;
     }[]
   >`
-    select c.id, c.title, c.replaced_at, c.created_at,
+    select c.id, c.title, c.replaced_at, c.deleted_at, c.created_at,
       (select f.id from certificate_files f where f.certificate_id = c.id and f.status = 'ready'
         order by f.created_at limit 1) as file_id
     from certificates c where c.replaced_by = ${cert.id}
@@ -253,8 +255,8 @@ export async function CertificateDetail({
             <CardTitle>Earlier versions</CardTitle>
             <CardDescription>
               {area === "admin"
-                ? "Versions this certificate replaced. Restore one to make it the stored certificate again."
-                : "Versions this certificate replaced. Only the admin can restore one."}
+                ? `Versions this certificate replaced. Restore one to make it the stored certificate again. Each is kept for ${TRASH_DAYS} days after it was replaced.`
+                : `Versions this certificate replaced, kept for ${TRASH_DAYS} days. Only the admin can restore one.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -269,6 +271,9 @@ export async function CertificateDetail({
                     <p className="text-sm text-muted-foreground">
                       Added {formatDateTime(h.created_at)}
                       {h.replaced_at ? ` · replaced ${formatDateTime(h.replaced_at)}` : ""}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Kept until {formatDate(eraseDate(h.deleted_at))}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -308,8 +313,8 @@ export async function CertificateDetail({
           className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
           confirm={
             area === "admin"
-              ? "Delete this certificate? It disappears from the list for everyone."
-              : "Delete this certificate? It disappears for everyone; only the admin can bring it back."
+              ? `Move this certificate to the Trash? It disappears from the list for everyone. You can restore it from the Trash for ${TRASH_DAYS} days.`
+              : `Delete this certificate? It disappears for everyone and goes to the Trash for ${TRASH_DAYS} days; only the admin can bring it back.`
           }
         >
           Delete certificate

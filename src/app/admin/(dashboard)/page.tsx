@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Activity, KeyRound, ShieldAlert, Users } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
@@ -7,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { actionLabel, formatDateTime } from "@/lib/format";
 import { db } from "@/lib/server/db";
+import { backupDue, backupSummary } from "@/lib/server/backup";
 import { getSettings } from "@/lib/server/settings";
+import { trashCount } from "@/lib/server/trash";
 import { requireAdmin } from "@/lib/server/session";
 
 export const metadata: Metadata = { title: "Admin overview" };
@@ -25,7 +28,7 @@ const severityVariant = {
 export default async function AdminOverviewPage() {
   await requireAdmin();
   const sql = db();
-  const [[stats], activity, events, settings] = await Promise.all([
+  const [[stats], activity, events, settings, backup, trash] = await Promise.all([
     sql<Stats[]>`
       select
         (select count(*)::int from app_users where role = 'viewer' and status = 'active') as staff,
@@ -53,6 +56,8 @@ export default async function AdminOverviewPage() {
       where severity <> 'info' order by at desc limit 8
     `,
     getSettings(),
+    backupSummary(),
+    trashCount(),
   ]);
 
   const tiles = [
@@ -69,6 +74,18 @@ export default async function AdminOverviewPage() {
       {settings.lockdown ? (
         <Alert variant="warning" className="mb-6">
           Lockdown is on. Staff can&apos;t sign in until you turn it off in Settings.
+        </Alert>
+      ) : null}
+      {backupDue(backup) ? (
+        <Alert variant="warning" className="mb-6">
+          {backup.lastBackup ? "No backup in the last 7 days. " : "No backup has been made yet. "}
+          <Link href="/admin/backup">Download a backup</Link>
+        </Alert>
+      ) : null}
+      {trash > 0 ? (
+        <Alert className="mb-6">
+          {trash} deleted certificate{trash === 1 ? " is" : "s are"} in the Trash.{" "}
+          <Link href="/admin/trash">Review the Trash</Link>
         </Alert>
       ) : null}
 
@@ -88,8 +105,14 @@ export default async function AdminOverviewPage() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Recent activity</CardTitle>
+            <Link
+              href="/admin/activity"
+              className="inline-flex min-h-11 items-center text-sm text-primary underline-offset-4 hover:underline"
+            >
+              See all activity
+            </Link>
           </CardHeader>
           <CardContent>
             {activity.length === 0 ? (

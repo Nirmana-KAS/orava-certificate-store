@@ -25,6 +25,9 @@ export const pages: Page[] = [
   { name: "admin-new-lab", path: "/admin/labs/new", as: "admin" },
   { name: "admin-staff", path: "/admin/users", as: "admin" },
   { name: "admin-settings", path: "/admin/settings", as: "admin" },
+  { name: "admin-trash", path: "/admin/trash", as: "admin" },
+  { name: "admin-activity", path: "/admin/activity", as: "admin" },
+  { name: "admin-backup", path: "/admin/backup", as: "admin" },
 ];
 
 export function storageFor(as: Page["as"]): string | undefined {

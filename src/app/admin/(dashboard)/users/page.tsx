@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { AddUserForm } from "@/components/admin/add-user-form";
 import { IssueUploadPasskey } from "@/components/admin/uploader-controls";
@@ -101,7 +102,13 @@ export default async function UsersPage() {
                       {u.sessions > 0 ? <Badge>Signed in ({u.sessions})</Badge> : null}
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Last sign-in: {formatDateTime(u.last_login_at)}
+                      Last sign-in: {formatDateTime(u.last_login_at)} ·{" "}
+                      <Link
+                        href={`/admin/activity?who=${encodeURIComponent(u.email)}`}
+                        className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
+                      >
+                        Activity<span className="sr-only"> of {u.email}</span>
+                      </Link>
                     </p>
                     {u.can_upload && u.upload_locked_at ? (
                       <p className="mt-1 text-sm text-destructive">

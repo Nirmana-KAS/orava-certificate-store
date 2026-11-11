@@ -45,8 +45,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select f.storage_path, f.original_name, c.title, c.id as certificate_id
     from certificate_files f join certificates c on c.id = f.certificate_id
     where f.id = ${id} and f.status = 'ready'
-      -- a replaced certificate is kept as history, and its file can still be opened by the admin
-      and (c.deleted_at is null or (${isAdmin} and c.replaced_by is not null))
+      -- certificates in the Trash, and earlier versions kept after a Replace, can still be
+      -- opened by the admin
+      and (c.deleted_at is null or ${isAdmin})
   `;
   if (!file) return notFound();
 

@@ -41,6 +41,13 @@ pnpm db:migrate
 pnpm dev
 ```
 
+## 🗄️ Trash, activity and backups
+
+- **Trash** (`/admin/trash`): deleted certificates stay 30 days with their files, then are erased.
+- **Activity log** (`/admin/activity`): every sign-in, view, download, change and export, with filters and CSV.
+- **Backup** (`/admin/backup`): one zip with every database table (JSON) and every file, made in the admin's browser. Download one weekly; the free database has no automatic backups.
+- **Daily job**: Vercel Cron calls `/api/cron/daily` (see `vercel.json`) to empty old Trash and email a backup reminder. Set `CRON_SECRET` (16+ random characters) in Vercel's environment variables.
+
 ## 🗺️ Roadmap
 
 <img src="docs/images/roadmap.svg" alt="Roadmap" width="100%"/>

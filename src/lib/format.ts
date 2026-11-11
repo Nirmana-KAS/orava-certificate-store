@@ -13,6 +13,19 @@ export function formatDateTime(value: Date | string | null | undefined): string 
   return dateTime.format(new Date(value));
 }
 
+const dateOnly = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Asia/Colombo",
+});
+
+/** "30 Oct 2026" in Sri Lanka time. */
+export function formatDate(value: Date | string | null | undefined): string {
+  if (!value) return "Never";
+  return dateOnly.format(new Date(value));
+}
+
 const time = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
@@ -50,6 +63,35 @@ const actionLabels: Record<string, string> = {
   "settings.device_code": "Changed new-device codes",
   "settings.session_hours": "Changed sign-in length",
   "settings.sign_out_everyone": "Signed out all staff",
+  "certificate.create": "Added a certificate",
+  "certificate.update": "Edited a certificate",
+  "certificate.delete": "Moved a certificate to the Trash",
+  "certificate.import": "Added a certificate from a file",
+  "certificate.import_auto": "Added a certificate from a file (read automatically)",
+  "certificate.import_discard": "Took back an imported certificate",
+  "certificate.replace": "Replaced a certificate with the same report number",
+  "certificate.restore_version": "Restored an earlier version",
+  "file.upload": "Attached a file",
+  "file.remove": "Removed a file",
+  "file.view": "Opened a file",
+  "file.download": "Downloaded a file",
+  "file.rename_standard": "Renamed stored files",
+  "type.create": "Added a certificate type",
+  "type.update": "Edited a certificate type",
+  "type.archive": "Archived a certificate type",
+  "type.restore": "Restored a certificate type",
+  "lab.create": "Added a lab",
+  "lab.update": "Edited a lab",
+  "lab.archive": "Archived a lab",
+  "lab.restore": "Restored a lab",
+  "trash.restore": "Restored a certificate from the Trash",
+  "trash.erase": "Deleted a certificate for good",
+  "trash.empty": "Emptied the Trash",
+  "trash.auto_erase": "Erased certificates older than 30 days",
+  "backup.export": "Started a backup download",
+  "backup.complete": "Finished a backup download",
+  "backup.reminder": "Sent a backup reminder",
+  "activity.export": "Downloaded the activity log",
 };
 
 export function actionLabel(action: string): string {

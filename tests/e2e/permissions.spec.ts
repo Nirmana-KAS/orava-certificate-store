@@ -153,7 +153,8 @@ test("an uploader unlocks upload mode, adds a certificate, and locks it again", 
       .click();
     s.once("dialog", (d) => d.accept());
     await s.getByRole("button", { name: "Delete certificate" }).click();
-    await expect(s).toHaveURL(/\/upload$/);
+    await expect(s).toHaveURL(/\/upload\?deleted=1$/);
+    await expect(s.getByText(/kept in the Trash for 30 days/)).toBeVisible();
     await expect(s.getByText(ref)).toHaveCount(0);
 
     // Locking ends upload mode

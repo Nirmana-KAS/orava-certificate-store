@@ -124,6 +124,30 @@ const server = createServer(async (req, res) => {
     uploadTokens.set(token, `${m[1]}/${m[2]}`);
     return send(res, 200, { url: `/object/upload/sign/${m[1]}/${m[2]}?token=${token}` });
   }
+  // Many signed links at once (Supabase: POST /object/sign/{bucket} with paths)
+  m = path.match(/^\/object\/sign\/([^/]+)$/);
+  if (m && req.method === "POST") {
+    const { expiresIn, paths } = JSON.parse((await readBody(req)).toString()) as {
+      expiresIn: number;
+      paths: string[];
+    };
+    return send(
+      res,
+      200,
+      paths.map((p) => {
+        const key = `${m![1]}/${p}`;
+        if (!objects.has(key))
+          return {
+            path: p,
+            signedURL: null,
+            error: "Either the object does not exist or you do not have access to it",
+          };
+        const token = randomUUID();
+        readTokens.set(token, { key, expires: Date.now() + expiresIn * 1000 });
+        return { path: p, signedURL: `/object/sign/${m![1]}/${p}?token=${token}`, error: null };
+      }),
+    );
+  }
   m = path.match(/^\/object\/sign\/([^/]+)\/(.+)$/);
   if (m && req.method === "POST") {
     const { expiresIn } = JSON.parse((await readBody(req)).toString()) as { expiresIn: number };

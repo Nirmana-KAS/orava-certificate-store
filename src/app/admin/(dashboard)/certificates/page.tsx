@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FilePen, Plus, ScanText } from "lucide-react";
+import { FilePen, Plus, ScanText, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/admin/page-header";
+import { Alert } from "@/components/ui/alert";
 import { CertificateSearch } from "@/components/certificates/certificate-search";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -11,6 +12,7 @@ import { renameStoredFilesAction } from "@/lib/admin/certificate-actions";
 import { certificatesWithOldNames } from "@/lib/server/file-names";
 import { storageConfigured } from "@/lib/server/storage";
 import { requireAdmin } from "@/lib/server/session";
+import { TRASH_DAYS, trashCount } from "@/lib/server/trash";
 
 export const metadata: Metadata = { title: "Certificates" };
 
@@ -20,7 +22,9 @@ export default async function CertificatesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireAdmin();
-  const filters = parseFilters(await searchParams);
+  const params = await searchParams;
+  const filters = parseFilters(params);
+  const trash = await trashCount();
   // Files stored before the ReportNo_Date_Lab names (or whose details changed since)
   const oldNames = storageConfigured() ? (await certificatesWithOldNames()).length : 0;
 
@@ -44,7 +48,19 @@ export default async function CertificatesPage({
         <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
           <Link href="/admin/types">Certificate types</Link>
         </Button>
+        <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+          <Link href="/admin/trash">
+            <Trash2 /> Trash{trash > 0 ? ` (${trash})` : ""}
+          </Link>
+        </Button>
       </div>
+
+      {params.deleted ? (
+        <Alert variant="success" className="mb-6">
+          Moved to the Trash. You can restore it from <Link href="/admin/trash">Trash</Link> for{" "}
+          {TRASH_DAYS} days.
+        </Alert>
+      ) : null}
 
       {oldNames > 0 ? (
         <div className="mb-6 grid gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 sm:flex sm:items-center sm:justify-between">
