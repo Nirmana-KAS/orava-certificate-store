@@ -108,7 +108,7 @@ const README = (when: Date, by: string, version: string, withFiles: boolean, boo
     "manifest.json         what is inside, with row and file counts.",
     "",
     "Not included, on purpose: the shared passkey, upload passkeys, the admin password and",
-    "authenticator secret, and sign-in sessions. After a restore they are set up again.",
+    "authenticator secret, and sign-in tokens. After a restore they are set up again.",
     "",
     "This file holds every certificate. Keep it somewhere safe, like an encrypted drive.",
     "",

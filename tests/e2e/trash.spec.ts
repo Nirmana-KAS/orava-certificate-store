@@ -130,9 +130,11 @@ test("certificates in the Trash for more than 30 days are erased", async ({ page
   // Pretend it was deleted 31 days ago
   const sql = postgres(databaseUrl, { max: 1, ssl: false, prepare: false, onnotice: () => {} });
   try {
-    await sql`
-      update certificates set deleted_at = now() - interval '31 days' where report_no = ${ref}
-    `;
+    // One simple statement (no parameters), so it can't mix with the app's queries on the
+    // test database
+    await sql.unsafe(
+      `update certificates set deleted_at = now() - interval '31 days' where report_no = '${ref}'`,
+    );
   } finally {
     await sql.end();
   }
@@ -252,7 +254,9 @@ test("a backup downloads the database and the files as one zip", async ({ page }
   expect(users).toContain("admin@example.com");
   expect(users).not.toContain("upload_passkey_hash");
   expect(db.text("database/app_settings.json")).not.toContain("passkey_hash");
-  expect(db.names.join(" ")).not.toMatch(/admin_credentials|sessions/);
+  expect(db.names.join(" ")).not.toMatch(/admin_credentials/);
+  // Sign-in history is kept, but never the sign-in tokens
+  expect(db.text("database/sessions.json")).not.toContain("token_hash");
   const labs = JSON.parse(db.text("database/labs.json")) as { logo: { base64: string } | null }[];
   expect(labs.some((l) => l.logo && l.logo.base64.length > 0)).toBe(true);
 
@@ -402,6 +406,85 @@ test("staff sign-ins show the place on a map", async ({ page, browser }, testInf
     page
       .getByTestId("activity")
       .getByRole("link", { name: /Colombo, Sri Lanka/ })
+      .first(),
+  ).toBeVisible();
+});
+
+test("a sign-in with the device's location shows the exact spot and the whole session", async ({
+  page,
+  browser,
+}, testInfo) => {
+  const tag = tagFor(testInfo.project.name);
+  const email = `exact-${tag.toLowerCase()}@example.com`;
+  const ref = `SES${tag}1`;
+  await addCertificate(page, ref);
+  const certUrl = page.url();
+  await page.goto("/admin/users");
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Add staff member" }).click();
+  await expect(page.getByText(`${email} can now sign in`)).toBeVisible();
+
+  // The person taps "Allow" when the browser asks; the device is in Kollupitiya
+  const context = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+    viewport: testInfo.project.use.viewport ?? { width: 1280, height: 800 },
+    geolocation: { latitude: 6.910812, longitude: 79.849531, accuracy: 18 },
+    permissions: ["geolocation"],
+    extraHTTPHeaders: {
+      "x-forwarded-for": `10.53.0.${tag.charCodeAt(0)}`,
+      "x-vercel-ip-city": "Colombo",
+      "x-vercel-ip-country": "LK",
+    },
+  });
+  try {
+    const s = await context.newPage();
+    await signInStaff(s, email);
+    await completeEmailCode(s, email);
+    // Opening a certificate is part of what the session did
+    await s.goto(certUrl.replace("/admin/certificates/", "/certificates/"));
+    await expect(s.getByText(ref).first()).toBeVisible();
+    await expect(s.getByRole("dialog")).toHaveCount(0);
+
+    await page.goto("/admin/users");
+    const card = page.locator("main li", { hasText: email });
+    const spot = card.getByRole("link", { name: /6\.91081,79\.84953/ });
+    await expect(spot).toBeVisible({ timeout: 15_000 });
+    await expect(spot).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/search/?api=1&query=6.91081%2C79.84953",
+    );
+    await expect(card.getByText("Exact, from the device · Within 20 m")).toBeVisible();
+    await expect(card.getByText(/1 sign-in, .+ in total/)).toBeVisible();
+
+    // Sign-in sessions: still signed in, with everything done so far
+    await card.getByRole("link", { name: `Sign-in sessions of ${email}` }).click();
+    await expect(page).toHaveURL(/\/admin\/activity\/sessions\?who=/);
+    const session = page.getByTestId("sessions").getByRole("listitem").first();
+    await expect(session.getByText("Signed in now")).toBeVisible();
+    await session.getByText(/^What was done/).click();
+    await expect(session.getByText("Signed in", { exact: true }).last()).toBeVisible();
+    await expect(session.getByText(`Opened certificate details · ${ref}`)).toBeVisible();
+    await expect(page.getByTestId("sessions-total")).toContainText("1 sign-in,");
+    await noSideScroll(page, "Sign-in sessions");
+    await noViolations(page, "Sign-in sessions");
+
+    // Signing out ends the session; its time stops there
+    await s.getByRole("button", { name: "Sign out" }).click();
+    await expect(s).toHaveURL(/\/$/);
+    await page.reload();
+    await expect(session.getByText("Signed out", { exact: true }).first()).toBeVisible();
+    await session.getByText(/^What was done/).click();
+    await expect(session.getByText("Signed out", { exact: true }).last()).toBeVisible();
+  } finally {
+    await context.close();
+  }
+
+  // The activity log shows the exact spot for everything done in that sign-in
+  await page.goto(`/admin/activity?who=${encodeURIComponent(email)}`);
+  await expect(
+    page
+      .getByTestId("activity")
+      .getByRole("link", { name: /6\.91081,79\.84953/ })
       .first(),
   ).toBeVisible();
 });

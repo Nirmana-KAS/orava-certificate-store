@@ -5,7 +5,12 @@ import { RotatePasskeyForm, SessionHoursForm } from "@/components/admin/settings
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { setDeviceCodeAction, setLockdownAction, signOutEveryoneAction } from "@/lib/admin/actions";
+import {
+  setDeviceCodeAction,
+  setRequireLocationAction,
+  setLockdownAction,
+  signOutEveryoneAction,
+} from "@/lib/admin/actions";
 import { formatDateTime } from "@/lib/format";
 import { getSettings } from "@/lib/server/settings";
 import { requireAdmin } from "@/lib/server/session";
@@ -51,6 +56,29 @@ export default async function SettingsPage() {
             <form action={setDeviceCodeAction.bind(null, !settings.requireDeviceCode)}>
               <SubmitButton variant="outline">
                 {settings.requireDeviceCode ? "Turn off" : "Turn on"}
+              </SubmitButton>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Require exact location
+              <Badge variant={settings.requireLocation ? "success" : "muted"}>
+                {settings.requireLocation ? "On" : "Off"}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Every sign-in asks the device for its location (GPS or Wi-Fi) so the activity log
+              shows the real place. When this is on, staff who don&apos;t allow it can&apos;t use
+              the app until they do. Tell staff their sign-in location is recorded.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={setRequireLocationAction.bind(null, !settings.requireLocation)}>
+              <SubmitButton variant="outline">
+                {settings.requireLocation ? "Turn off" : "Turn on"}
               </SubmitButton>
             </form>
           </CardContent>

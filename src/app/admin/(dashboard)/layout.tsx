@@ -1,5 +1,6 @@
 import { AdminNav } from "@/components/admin/admin-nav";
 import { LiveUpdates } from "@/components/layout/live-updates";
+import { LocationCheck } from "@/components/layout/location-check";
 import { requireAdmin } from "@/lib/server/session";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -9,6 +10,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminNav />
       <div className="min-w-0 flex-1">{children}</div>
       <LiveUpdates signInPath="/admin/login" />
+      <LocationCheck />
     </div>
   );
 }

@@ -125,16 +125,72 @@ export function isLocalIp(ip: string | null | undefined): boolean {
   );
 }
 
+/** The device's own position (GPS / Wi-Fi), shared by the browser with permission. */
+export type DeviceGeo = {
+  lat: number;
+  lon: number;
+  /** Metres: the real spot is within this distance */
+  accuracy: number;
+  /** Street address, when it could be looked up */
+  address?: string;
+  at?: string;
+};
+
+export type GeoStatus = "exact" | "refused" | "unavailable" | null;
+
 export type Place = {
-  /** "Colombo, Sri Lanka", or why there is no place */
+  /** "Kollupitiya, Colombo 3", "Colombo, Sri Lanka", or why there is no place */
   text: string;
   /** Google Maps with a pin on the place, when it is known */
   mapUrl: string | null;
   known: boolean;
+  /** exact: from the device; approximate: from the internet address */
+  kind: "exact" | "approximate" | "none";
+  /** "Within 20 m" for exact places */
+  accuracy?: string;
+  /** Why there is no exact place, when the person was asked */
+  note?: string;
 };
 
-/** The approximate place a request came from, with a map link. */
-export function describePlace(ip: string | null | undefined, meta?: ClientMeta | null): Place {
+const mapsPin = (query: string) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+
+const accuracyText = (m: number) =>
+  m < 1000
+    ? `Within ${Math.max(5, Math.round(m / 5) * 5)} m`
+    : `Within ${(m / 1000).toFixed(1)} km`;
+
+/**
+ * Where a request came from: the device's exact position when it was shared, otherwise the
+ * approximate town of the internet address, with a Google Maps link either way.
+ */
+export function describePlace(
+  ip: string | null | undefined,
+  meta?: ClientMeta | null,
+  geo?: DeviceGeo | null,
+  status?: GeoStatus,
+): Place {
+  if (geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lon)) {
+    const coords = `${geo.lat.toFixed(5)},${geo.lon.toFixed(5)}`;
+    return {
+      text: geo.address || coords,
+      mapUrl: mapsPin(coords),
+      known: true,
+      kind: "exact",
+      accuracy: accuracyText(geo.accuracy),
+    };
+  }
+  const note =
+    status === "refused"
+      ? "Exact location not allowed"
+      : status === "unavailable"
+        ? "Device couldn't give its location"
+        : undefined;
+  const approx = approximatePlace(ip, meta);
+  return note ? { ...approx, note } : approx;
+}
+
+function approximatePlace(ip: string | null | undefined, meta?: ClientMeta | null): Place {
   const m = meta ?? {};
   const parts = [m.city, m.country ? countryName(m.country) : undefined].filter(
     (p): p is string => !!p,
@@ -144,12 +200,10 @@ export function describePlace(ip: string | null | undefined, meta?: ClientMeta |
       typeof m.lat === "number" && typeof m.lon === "number"
         ? `${m.lat},${m.lon}`
         : parts.join(", ");
-    return {
-      text: parts.join(", "),
-      mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`,
-      known: true,
-    };
+    return { text: parts.join(", "), mapUrl: mapsPin(query), known: true, kind: "approximate" };
   }
-  if (isLocalIp(ip)) return { text: "This computer or office network", mapUrl: null, known: false };
-  return { text: "Not recorded", mapUrl: null, known: false };
+  if (isLocalIp(ip)) {
+    return { text: "This computer or office network", mapUrl: null, known: false, kind: "none" };
+  }
+  return { text: "Not recorded", mapUrl: null, known: false, kind: "none" };
 }

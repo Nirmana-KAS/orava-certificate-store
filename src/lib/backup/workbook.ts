@@ -2,8 +2,14 @@
 // read at a glance. Built in the admin's browser from the rows the backup just fetched.
 
 import { metaDetails } from "@/lib/activity";
-import { describeDevice, describePlace, type ClientMeta } from "@/lib/client-info";
-import { actionLabel, formatDate, formatDateTime } from "@/lib/format";
+import {
+  describeDevice,
+  describePlace,
+  type ClientMeta,
+  type DeviceGeo,
+  type GeoStatus,
+} from "@/lib/client-info";
+import { actionLabel, formatDate, formatDateTime, formatDuration } from "@/lib/format";
 import { CATEGORY_LABELS } from "@/lib/labs";
 import type { FieldDef } from "@/lib/types/schema";
 import type { XCell, XSheet } from "@/lib/xlsx";
@@ -303,6 +309,97 @@ export function backupWorkbook(
     ),
   );
 
+  const sessions = new Map((t.sessions ?? []).map((s) => [str(s.id), s]));
+  const placeOf = (ip: string | null, meta: ClientMeta | null, sessionId: unknown) => {
+    const s = sessionId ? sessions.get(str(sessionId)) : undefined;
+    const place = describePlace(
+      ip,
+      meta,
+      (s?.geo ?? null) as DeviceGeo | null,
+      (s?.geo_status ?? null) as GeoStatus,
+    );
+    const text =
+      place.kind === "exact"
+        ? `${place.text} (exact, ${place.accuracy?.toLowerCase()})`
+        : place.kind === "approximate"
+          ? `${place.text} (approximate)`
+          : place.text;
+    return { place, text };
+  };
+
+  // Sign-in sessions: from sign-in to sign-out (or the last thing done), with what was done
+  const bySession = new Map<string, Row[]>();
+  for (const a of t.audit_logs ?? []) {
+    if (!a.session_id) continue;
+    const list = bySession.get(str(a.session_id)) ?? [];
+    list.push(a);
+    bySession.set(str(a.session_id), list);
+  }
+  const sessionRows = [...(t.sessions ?? [])].sort((a, b) =>
+    str(b.created_at).localeCompare(str(a.created_at)),
+  );
+  sheets.push(
+    sheet(
+      "Sign-in sessions",
+      [
+        "Person",
+        "Signed in",
+        "Ended",
+        "How it ended",
+        "Time signed in",
+        "Location",
+        "Map",
+        "Browser",
+        "System",
+        "Device",
+        "Actions",
+        "What was done",
+      ],
+      sessionRows.map((s) => {
+        const acts = (bySession.get(str(s.id)) ?? []).sort((a, b) =>
+          str(a.at).localeCompare(str(b.at)),
+        );
+        const start = new Date(str(s.created_at)).getTime();
+        const lastAct = acts.length ? new Date(str(acts.at(-1)!.at)).getTime() : 0;
+        const last = Math.max(start, new Date(str(s.last_seen_at)).getTime() || 0, lastAct);
+        const revoked = s.revoked_at ? new Date(str(s.revoked_at)).getTime() : null;
+        const signedOut = acts.some((a) => a.action === "sign_out");
+        const live = !revoked && new Date(str(s.expires_at)).getTime() > info.at.getTime();
+        const end = revoked ?? (live ? info.at.getTime() : last);
+        const how = revoked
+          ? signedOut
+            ? "Signed out"
+            : "Ended by the admin"
+          : live
+            ? "Still signed in when the backup was made"
+            : "Ran out (time shown up to the last action)";
+        const meta = (s.client ?? null) as ClientMeta | null;
+        const d = s.user_agent ? describeDevice(str(s.user_agent), meta) : null;
+        const { place, text } = placeOf(s.ip ? str(s.ip) : null, meta, s.id);
+        return [
+          users.get(str(s.user_id)) ?? "",
+          when(s.created_at),
+          formatDateTime(new Date(end)),
+          how,
+          formatDuration(Math.max(0, (end - start) / 1000)),
+          text,
+          place.mapUrl ?? "",
+          d?.browser ?? "",
+          d?.system ?? "",
+          d?.device ?? "",
+          acts.length,
+          acts
+            .map(
+              (a) =>
+                `${formatDateTime(str(a.at)).split(", ")[1] ?? ""} ${actionLabel(str(a.action))}${a.target ? ` (${str(a.target)})` : ""}`,
+            )
+            .join("; "),
+        ];
+      }),
+      [30, 20, 20, 24, 14, 36, 20, 16, 16, 12, 9, 80],
+    ),
+  );
+
   const activity = [...(t.audit_logs ?? [])].sort((a, b) => str(b.at).localeCompare(str(a.at)));
   sheets.push(
     sheet(
@@ -324,7 +421,7 @@ export function backupWorkbook(
         const meta = (a.client ?? null) as ClientMeta | null;
         const d = a.user_agent ? describeDevice(str(a.user_agent), meta) : null;
         const ip = a.ip ? str(a.ip) : null;
-        const place = describePlace(ip, meta);
+        const { place, text } = placeOf(ip, meta, a.session_id);
         return [
           when(a.at),
           str(a.actor_email) || "System (automatic)",
@@ -333,7 +430,7 @@ export function backupWorkbook(
           d?.browser ?? "",
           d?.system ?? "",
           d?.device ?? "",
-          ip || place.known ? place.text : "",
+          ip || place.known ? text : "",
           place.mapUrl ?? "",
           ip ?? "",
           metaDetails(a.meta as Row)

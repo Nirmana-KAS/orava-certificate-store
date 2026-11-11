@@ -1,6 +1,12 @@
 import { MapPin } from "lucide-react";
 
-import { describeDevice, describePlace, type ClientMeta } from "@/lib/client-info";
+import {
+  describeDevice,
+  describePlace,
+  type ClientMeta,
+  type DeviceGeo,
+  type GeoStatus,
+} from "@/lib/client-info";
 import { cn } from "@/lib/utils";
 
 export type Fact = { label: string; value: React.ReactNode };
@@ -24,32 +30,51 @@ export function Facts({ facts, className }: { facts: Fact[]; className?: string 
   );
 }
 
-/** A place with a link that opens Google Maps with a pin on it. */
+/**
+ * A place with a link that opens Google Maps with a pin on it, saying whether it is the
+ * device's exact location or only the internet provider's town.
+ */
 export function PlaceLink({
   ip,
   meta,
+  geo,
+  status,
   label,
 }: {
   ip: string | null;
   meta: ClientMeta | null;
+  geo?: DeviceGeo | null;
+  status?: GeoStatus;
   /** Says what the place is for screen readers, e.g. "last sign-in of a@b.com" */
   label?: string;
 }) {
-  const place = describePlace(ip, meta);
-  if (!place.mapUrl) return <span className="text-muted-foreground">{place.text}</span>;
+  const place = describePlace(ip, meta, geo, status);
+  const how =
+    place.kind === "exact"
+      ? `Exact, from the device · ${place.accuracy}`
+      : place.kind === "approximate"
+        ? `Approximate, from the internet address${place.note ? ` · ${place.note}` : ""}`
+        : place.note;
   return (
-    <a
-      href={place.mapUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex min-h-6 items-center gap-1 text-primary underline-offset-4 hover:underline"
-    >
-      <MapPin className="size-4 shrink-0" aria-hidden="true" />
-      <span>
-        {place.text}
-        <span className="sr-only">{label ? ` (${label})` : ""}, open the map in a new tab</span>
-      </span>
-    </a>
+    <span className="grid">
+      {place.mapUrl ? (
+        <a
+          href={place.mapUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-6 items-start gap-1 text-primary underline-offset-4 hover:underline"
+        >
+          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>
+            {place.text}
+            <span className="sr-only">{label ? ` (${label})` : ""}, open the map in a new tab</span>
+          </span>
+        </a>
+      ) : (
+        <span className="text-muted-foreground">{place.text}</span>
+      )}
+      {how ? <span className="text-xs text-muted-foreground">{how}</span> : null}
+    </span>
   );
 }
 
@@ -58,6 +83,8 @@ export function clientFacts(
   ip: string | null,
   userAgent: string | null,
   meta: ClientMeta | null,
+  geo?: DeviceGeo | null,
+  status?: GeoStatus,
 ): Fact[] {
   const facts: Fact[] = [];
   if (userAgent) {
@@ -68,8 +95,11 @@ export function clientFacts(
       { label: "Device", value: d.device },
     );
   }
-  if (ip || meta?.city || meta?.country) {
-    facts.push({ label: "Location", value: <PlaceLink ip={ip} meta={meta} /> });
+  if (geo || ip || meta?.city || meta?.country) {
+    facts.push({
+      label: "Location",
+      value: <PlaceLink ip={ip} meta={meta} geo={geo} status={status} />,
+    });
   }
   if (ip) facts.push({ label: "IP address", value: ip });
   return facts;

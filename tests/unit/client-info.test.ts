@@ -80,10 +80,37 @@ describe("describePlace", () => {
       text: "Not recorded",
       mapUrl: null,
       known: false,
+      kind: "none",
     });
     expect(isLocalIp("192.168.1.25")).toBe(true);
     expect(isLocalIp("172.20.0.1")).toBe(true);
     expect(isLocalIp("172.40.0.1")).toBe(false);
+  });
+});
+
+describe("describePlace with the device's location", () => {
+  it("prefers the exact spot, with its address, accuracy and a pin", () => {
+    const p = describePlace(
+      "112.134.140.96",
+      { city: "Colombo", country: "LK" },
+      { lat: 6.910812, lon: 79.849531, accuracy: 18, address: "Galle Road, Kollupitiya, Colombo" },
+      "exact",
+    );
+    expect(p).toMatchObject({
+      text: "Galle Road, Kollupitiya, Colombo",
+      kind: "exact",
+      accuracy: "Within 20 m",
+      mapUrl: "https://www.google.com/maps/search/?api=1&query=6.91081%2C79.84953",
+    });
+  });
+
+  it("falls back to the town and says why", () => {
+    const p = describePlace("112.134.140.96", { city: "Colombo", country: "LK" }, null, "refused");
+    expect(p).toMatchObject({
+      text: "Colombo, Sri Lanka",
+      kind: "approximate",
+      note: "Exact location not allowed",
+    });
   });
 });
 
@@ -136,5 +163,15 @@ describe("xlsx", () => {
     expect(sheet).toContain("<v>1.5</v>");
     expect(sheet).toContain('<autoFilter ref="A1:B2"/>');
     expect(parts.find((p) => p.name === "xl/workbook.xml")!.data).toContain('name="Staff"');
+  });
+});
+
+describe("formatDuration", () => {
+  it("reads like a person would say it", async () => {
+    const { formatDuration } = await import("@/lib/format");
+    expect(formatDuration(20)).toBe("Under a minute");
+    expect(formatDuration(45 * 60)).toBe("45 min");
+    expect(formatDuration(2 * 3600 + 15 * 60)).toBe("2 h 15 min");
+    expect(formatDuration(26 * 3600)).toBe("1 d 2 h");
   });
 });

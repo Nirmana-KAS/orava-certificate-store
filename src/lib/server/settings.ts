@@ -16,6 +16,8 @@ export type AppSettings = {
   backupRemindEmail: boolean;
   /** When the admin last opened the Trash */
   trashSeenAt: Date | null;
+  /** Staff must share their device location to use the app */
+  requireLocation: boolean;
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -31,10 +33,12 @@ export async function getSettings(): Promise<AppSettings> {
       backup_remind_banner: boolean;
       backup_remind_email: boolean;
       trash_seen_at: Date | null;
+      require_location: boolean;
     }[]
   >`
     select passkey_hash, passkey_version, passkey_rotated_at, session_hours, require_device_code, lockdown,
-      backup_remind_days, backup_remind_banner, backup_remind_email, trash_seen_at
+      backup_remind_days, backup_remind_banner, backup_remind_email, trash_seen_at,
+      require_location
     from app_settings where id = true
   `;
   if (!row) throw new Error("app_settings row is missing. Run the database migrations.");
@@ -50,5 +54,6 @@ export async function getSettings(): Promise<AppSettings> {
     backupRemindBanner: row.backup_remind_banner,
     backupRemindEmail: row.backup_remind_email,
     trashSeenAt: row.trash_seen_at,
+    requireLocation: row.require_location,
   };
 }

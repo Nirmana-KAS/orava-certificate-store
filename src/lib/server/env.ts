@@ -31,6 +31,9 @@ const schema = z.object({
   // Scheduled jobs (/api/cron/daily): Vercel Cron sends it as "Authorization: Bearer …",
   // cron-job.org in the x-cron-secret header
   CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters").optional(),
+  // Turns a shared device location into a street address with OpenStreetMap's free Nominatim
+  // service (on unless set to "off"; the tests turn it off)
+  REVERSE_GEOCODE: z.enum(["on", "off"]).optional(),
   // Test-only: write emails to a JSON file instead of sending (refused on Vercel)
   MAIL_FILE: z.string().optional(),
 });

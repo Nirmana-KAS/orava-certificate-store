@@ -16,10 +16,11 @@ import {
   signOutUserAction,
   stopUploaderAction,
 } from "@/lib/admin/actions";
-import { describeDevice, type ClientMeta } from "@/lib/client-info";
-import { formatDateTime } from "@/lib/format";
+import { describeDevice, type ClientMeta, type DeviceGeo, type GeoStatus } from "@/lib/client-info";
+import { formatDateTime, formatDuration } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/session";
+import { timeSignedIn } from "@/lib/server/sessions-history";
 
 export const metadata: Metadata = { title: "Staff" };
 
@@ -39,11 +40,14 @@ type Row = {
   last_ip: string | null;
   last_ua: string | null;
   last_client: ClientMeta | null;
+  last_geo: DeviceGeo | null;
+  last_geo_status: GeoStatus;
 };
 
 export default async function UsersPage() {
   await requireAdmin();
-  const users = await db()<Row[]>`
+  const [users, time] = await Promise.all([
+    db()<Row[]>`
     select u.id, u.email, u.name, u.status, u.can_download, u.can_report, u.can_upload,
       u.upload_locked_at, u.upload_passkey_set_at, u.last_login_at,
       exists (select 1 from sessions s
@@ -51,16 +55,18 @@ export default async function UsersPage() {
           and s.upload_until > now()) as in_upload_mode,
       (select count(*)::int from sessions s
         where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()) as sessions,
-      l.ip as last_ip, l.user_agent as last_ua, l.client as last_client
+      l.ip as last_ip, l.user_agent as last_ua, l.client as last_client, l.geo as last_geo,
+      l.geo_status as last_geo_status
     from app_users u
     left join lateral (
-      select a.ip, a.user_agent, a.client from audit_logs a
-      where a.actor_id = u.id and a.action in ('sign_in', 'admin.sign_in')
-      order by a.at desc limit 1
+      select s.ip, s.user_agent, s.client, s.geo, s.geo_status from sessions s
+      where s.user_id = u.id order by s.created_at desc limit 1
     ) l on true
     where u.role = 'viewer'
     order by u.status, u.email
-  `;
+  `,
+    timeSignedIn(30),
+  ]);
 
   return (
     <>
@@ -117,6 +123,15 @@ export default async function UsersPage() {
                       <Facts
                         facts={[
                           { label: "When", value: formatDateTime(u.last_login_at) },
+                          {
+                            label: "Last 30 days",
+                            value: (() => {
+                              const t = time.get(u.email);
+                              return t
+                                ? `${t.signIns} sign-in${t.signIns === 1 ? "" : "s"}, ${formatDuration(t.seconds)} in total`
+                                : "No sign-ins";
+                            })(),
+                          },
                           ...(u.last_login_at
                             ? (() => {
                                 const d = u.last_ua
@@ -129,6 +144,8 @@ export default async function UsersPage() {
                                       <PlaceLink
                                         ip={u.last_ip}
                                         meta={u.last_client}
+                                        geo={u.last_geo}
+                                        status={u.last_geo_status}
                                         label={`last sign-in of ${u.email}`}
                                       />
                                     ),
@@ -141,12 +158,20 @@ export default async function UsersPage() {
                             : []),
                         ]}
                       />
-                      <Link
-                        href={`/admin/activity?who=${encodeURIComponent(u.email)}`}
-                        className="inline-flex min-h-11 items-center justify-self-start text-sm text-primary underline-offset-4 hover:underline"
-                      >
-                        All activity<span className="sr-only"> of {u.email}</span>
-                      </Link>
+                      <div className="flex flex-wrap gap-x-4">
+                        <Link
+                          href={`/admin/activity/sessions?who=${encodeURIComponent(u.email)}`}
+                          className="inline-flex min-h-11 items-center text-sm text-primary underline-offset-4 hover:underline"
+                        >
+                          Sign-in sessions<span className="sr-only"> of {u.email}</span>
+                        </Link>
+                        <Link
+                          href={`/admin/activity?who=${encodeURIComponent(u.email)}`}
+                          className="inline-flex min-h-11 items-center text-sm text-primary underline-offset-4 hover:underline"
+                        >
+                          All activity<span className="sr-only"> of {u.email}</span>
+                        </Link>
+                      </div>
                     </div>
                     {u.can_upload && u.upload_locked_at ? (
                       <p className="mt-1 text-sm text-destructive">

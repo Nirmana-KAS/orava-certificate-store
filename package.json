@@ -1,6 +1,6 @@
 {
   "name": "orava-certificate-store",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "private": true,
   "type": "module",
   "description": "Secure certificate store for orava (Pvt) Ltd.: search, review and download certificates.",

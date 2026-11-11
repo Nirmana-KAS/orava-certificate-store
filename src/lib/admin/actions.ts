@@ -245,6 +245,13 @@ export async function setDeviceCodeAction(on: boolean): Promise<void> {
   revalidatePath("/admin/settings");
 }
 
+export async function setRequireLocationAction(on: boolean): Promise<void> {
+  const { actor, client } = await context();
+  await db()`update app_settings set require_location = ${on}, updated_at = now() where id = true`;
+  await audit(actor, "settings.require_location", client, null, { on });
+  revalidatePath("/admin/settings");
+}
+
 export async function setSessionHoursAction(
   _prev: FormState,
   formData: FormData,

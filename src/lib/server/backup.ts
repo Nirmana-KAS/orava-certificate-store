@@ -30,6 +30,8 @@ export const BACKUP_TABLES: Record<string, Table> = {
   certificate_type_versions: { page: 200, key: "type_version" },
   certificates: { page: 100 },
   certificate_files: { page: 500 },
+  // Sign-in history (when, how long, where); the sign-in token itself is left out
+  sessions: { page: 1000, omit: ["token_hash"] },
   audit_logs: { page: 1000 },
   security_events: { page: 1000 },
 };

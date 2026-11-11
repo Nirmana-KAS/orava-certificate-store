@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     ]),
     ...rows.map((r) => {
       const d = r.user_agent ? describeDevice(r.user_agent, r.client) : null;
-      const place = describePlace(r.ip, r.client);
+      const place = describePlace(r.ip, r.client, r.geo, r.geo_status);
       return csvLine([
         formatDateTime(r.at),
         r.actor_email ?? "System (automatic)",
@@ -48,7 +48,9 @@ export async function GET(request: NextRequest) {
         d?.browser ?? "",
         d?.system ?? "",
         d?.device ?? "",
-        r.ip || place.known ? place.text : "",
+        r.ip || place.known
+          ? `${place.text}${place.kind === "exact" ? ` (exact, ${place.accuracy?.toLowerCase()})` : place.kind === "approximate" ? " (approximate)" : ""}`
+          : "",
         place.mapUrl ?? "",
         r.ip ?? "",
         metaDetails(r.meta)

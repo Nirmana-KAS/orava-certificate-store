@@ -107,8 +107,8 @@ export default async function BackupPage() {
               full restore, and every certificate file. Certificates in the Trash are included too.
             </li>
             <li>
-              Passwords, passkeys, the authenticator secret and sign-ins are left out on purpose.
-              They are set up again after a restore.
+              Passwords, passkeys, the authenticator secret and sign-in tokens are left out on
+              purpose. They are set up again after a restore.
             </li>
             <li>
               Files come straight from storage to your computer, so the backup works on the free

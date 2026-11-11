@@ -7,6 +7,16 @@ const dateTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Colombo",
 });
 
+/** "2 h 15 min", "45 min", "Under a minute". */
+export function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  if (m < 1) return "Under a minute";
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  const min = m % 60;
+  return [d ? `${d} d` : "", h ? `${h} h` : "", min ? `${min} min` : ""].filter(Boolean).join(" ");
+}
+
 /** "30 Oct 2026, 14:05" in Sri Lanka time. */
 export function formatDateTime(value: Date | string | null | undefined): string {
   if (!value) return "Never";
@@ -64,6 +74,7 @@ const actionLabels: Record<string, string> = {
   "settings.session_hours": "Changed sign-in length",
   "settings.sign_out_everyone": "Signed out all staff",
   "settings.backup_reminder": "Changed backup reminders",
+  "settings.require_location": "Changed the location rule",
   "certificate.create": "Added a certificate",
   "certificate.update": "Edited a certificate",
   "certificate.delete": "Moved a certificate to the Trash",
@@ -74,6 +85,7 @@ const actionLabels: Record<string, string> = {
   "certificate.restore_version": "Restored an earlier version",
   "file.upload": "Attached a file",
   "file.remove": "Removed a file",
+  "certificate.view": "Opened certificate details",
   "file.view": "Opened a file",
   "file.download": "Downloaded a file",
   "file.rename_standard": "Renamed stored files",

@@ -316,6 +316,12 @@ export async function setupAdminAction(_prev: FormState, formData: FormData): Pr
 export async function signOutAction(): Promise<void> {
   const client = await clientInfo();
   const session = await endCurrentSession();
-  if (session) await audit({ id: session.user.id, email: session.user.email }, "sign_out", client);
+  if (session) {
+    await audit(
+      { id: session.user.id, email: session.user.email, sessionId: session.id },
+      "sign_out",
+      client,
+    );
+  }
   redirect(session?.user.role === "admin" ? "/admin/login" : "/");
 }

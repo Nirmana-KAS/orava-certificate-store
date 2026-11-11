@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download, Search } from "lucide-react";
 
+import { ActivityTabs } from "@/components/admin/activity-tabs";
 import { Facts, clientFacts } from "@/components/admin/client-facts";
 import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,8 @@ export default async function ActivityPage({
         title="Activity log"
         description="Who did what, and when: sign-ins, views and downloads, changes, reports and settings."
       />
+
+      <ActivityTabs current="all" />
 
       <form
         key={activityHref(BASE, f)}
@@ -148,7 +151,7 @@ export default async function ActivityPage({
                   "System (automatic)"
                 ),
               },
-              ...clientFacts(r.ip, r.user_agent, r.client),
+              ...clientFacts(r.ip, r.user_agent, r.client, r.geo, r.geo_status),
               ...metaDetails(r.meta),
             ];
             return (

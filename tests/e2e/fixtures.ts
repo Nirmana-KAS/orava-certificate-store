@@ -34,4 +34,5 @@ export const appEnv = {
   SUPABASE_URL: `http://127.0.0.1:${E2E.storagePort}`,
   SUPABASE_SERVICE_ROLE_KEY: E2E.storageKey,
   CRON_SECRET: "e2e-cron-secret-0123456789",
+  REVERSE_GEOCODE: "off",
 };

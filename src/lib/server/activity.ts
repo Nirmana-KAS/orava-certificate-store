@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ClientMeta } from "@/lib/client-info";
+import type { ClientMeta, DeviceGeo, GeoStatus } from "@/lib/client-info";
 import { containsPattern, kindPatterns, type ActivityFilters } from "@/lib/activity";
 
 import { db } from "./db";
@@ -15,6 +15,10 @@ export type ActivityRow = {
   user_agent: string | null;
   meta: Record<string, unknown>;
   client: ClientMeta | null;
+  session_id: string | null;
+  /** The sign-in's exact device location, when it was shared */
+  geo: DeviceGeo | null;
+  geo_status: GeoStatus;
 };
 
 /** One page (or, for the CSV, up to `limit` rows) of the activity log, newest first. */
@@ -41,7 +45,10 @@ export async function findActivity(
   `;
   const [rows, [count]] = await Promise.all([
     sql<ActivityRow[]>`
-      select id::text, at, actor_email, action, target, ip, user_agent, meta, client
+      select id::text, at, actor_email, action, target, ip, user_agent, meta, client,
+        session_id::text,
+        (select geo from sessions s where s.id = audit_logs.session_id) as geo,
+        (select geo_status from sessions s where s.id = audit_logs.session_id) as geo_status
       from audit_logs ${where}
       order by at desc, id desc
       limit ${limit} offset ${offset}
