@@ -259,24 +259,43 @@ async function checkStorage(): Promise<ComponentResult> {
       limitCheck("Space (free plan)", Number(usage?.bytes ?? 0), FREE_LIMITS.storageBytes, mb),
     );
     if (file) {
-      const r = await timed(async () => {
-        const url = await signedDownloadUrl(file.storage_path, 60);
-        const res = await fetch(url, { headers: { Range: "bytes=0-0" }, cache: "no-store" });
-        await res.body?.cancel();
-        return res.status;
-      }, 10_000);
-      checks.push({
-        name: "Opening a file with a short link",
-        status: r.value === 200 || r.value === 206 ? "ok" : "fail",
-        detail:
-          r.value === 200 || r.value === 206
-            ? `Worked in ${r.ms} ms`
-            : `The link didn't work (answer ${r.value})`,
-        ms: r.ms,
-      });
+      // Two steps, timed apart, so a slow one is easy to spot: the server asks storage for a
+      // 60-second link, then opens the first byte of the newest file with it
+      const signed = await timed(() => signedDownloadUrl(file.storage_path, 60), 10_000).catch(
+        (e: unknown) => {
+          checks.push({ name: "Making a short link", status: "fail", detail: errText(e) });
+          return null;
+        },
+      );
+      if (signed) {
+        checks.push({
+          name: "Making a short link",
+          status: signed.ms > 3000 ? "warn" : "ok",
+          detail: `In ${signed.ms} ms`,
+          ms: signed.ms,
+        });
+        try {
+          const r = await fetchStatus(signed.value, { headers: { Range: "bytes=0-0" } }, 15_000);
+          const ok = r.value.status === 200 || r.value.status === 206;
+          checks.push({
+            name: "Opening a file with the link",
+            status: ok ? (r.ms > 5000 ? "warn" : "ok") : "fail",
+            detail: ok
+              ? `Worked in ${r.ms} ms${r.ms > 5000 ? " (slow)" : ""}`
+              : `The link didn't work (answer ${r.value.status})`,
+            ms: r.ms,
+          });
+        } catch (e) {
+          checks.push({ name: "Opening a file with the link", status: "fail", detail: errText(e) });
+        }
+      }
     }
   } catch (e) {
-    checks.push({ name: "Opening a file with a short link", status: "fail", detail: errText(e) });
+    checks.push({
+      name: "Space (free plan)",
+      status: "warn",
+      detail: `Couldn't read: ${errText(e)}`,
+    });
   }
   return result(checks, ms !== undefined ? `Answers in ${ms} ms` : "Checked", ms);
 }
@@ -336,6 +355,21 @@ async function checkScheduler(): Promise<ComponentResult> {
     d ? Math.round((Date.now() - new Date(d).getTime()) / 60000) : null;
   const cron = ago(row?.cron ?? null);
   const daily = ago(row?.daily ?? null);
+  if (!process.env.VERCEL && cron === null && daily === null) {
+    // Neither job can reach a computer, so on pnpm dev this isn't a problem
+    return {
+      status: "off",
+      summary: "Runs on the live site only",
+      checks: [
+        {
+          name: "Scheduled jobs",
+          status: "off",
+          detail:
+            "cron-job.org and Vercel Cron can't reach this computer. They run on the live (Vercel) site once set up.",
+        },
+      ],
+    };
+  }
   const checks: CheckResult[] = [
     {
       name: "Checks every 5 minutes (cron-job.org)",
@@ -361,13 +395,34 @@ async function checkScheduler(): Promise<ComponentResult> {
   );
 }
 
-async function fetchStatus(url: string, init: RequestInit = {}) {
-  return timed(async () => {
-    const res = await fetch(url, { cache: "no-store", redirect: "manual", ...init });
-    // Read the (small) answer to the end, so the connection is free for the next check
-    await res.arrayBuffer().catch(() => undefined);
-    return res;
-  }, 8000);
+/**
+ * Asks for a page or file and keeps only the answer's status and headers: the download is
+ * stopped as soon as they arrive, so a big or slow file can't hold up the checks.
+ */
+/** Node's own fetch, without Next.js's caching layer (which can read a whole answer first). */
+const rawFetch: typeof fetch = (input, init) =>
+  (
+    (globalThis.fetch as typeof fetch & { _nextOriginalFetch?: typeof fetch })._nextOriginalFetch ??
+    globalThis.fetch
+  )(input, init);
+
+async function fetchStatus(url: string, init: RequestInit = {}, limitMs = 8000) {
+  const start = performance.now();
+  const stop = new AbortController();
+  const timer = setTimeout(
+    () => stop.abort(new Timeout(`no answer after ${limitMs / 1000} s`)),
+    limitMs,
+  );
+  try {
+    const res = await rawFetch(url, { redirect: "manual", ...init, signal: stop.signal });
+    return { value: res, ms: Math.round(performance.now() - start) };
+  } catch (e) {
+    throw stop.signal.aborted && stop.signal.reason instanceof Timeout ? stop.signal.reason : e;
+  } finally {
+    clearTimeout(timer);
+    // Drops the rest of the answer and closes the connection
+    stop.abort();
+  }
 }
 
 async function checkGate(origin: string | null): Promise<ComponentResult> {

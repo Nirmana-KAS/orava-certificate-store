@@ -146,6 +146,8 @@ export type Connection = {
   from: ComponentId;
   to: ComponentId;
   label: string;
+  /** A shorter label for the diagram, where lines between boxes are short */
+  short?: string;
   /** What flows through it, in plain words */
   about: string;
   /** An example of what is sent, with private parts hidden */
@@ -164,6 +166,7 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "gate-app",
+    short: "Requests",
     from: "gate",
     to: "app",
     label: "Checked requests",
@@ -191,6 +194,7 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "app-storage",
+    short: "Links",
     from: "app",
     to: "storage",
     label: "Signed links",
@@ -217,6 +221,7 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "browser-reader",
+    short: "Engine",
     from: "browser",
     to: "reader",
     label: "Reading files",
@@ -225,6 +230,7 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "app-geocoder",
+    short: "Lookup",
     from: "app",
     to: "geocoder",
     label: "Address lookup",
@@ -233,6 +239,7 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "scheduler-app",
+    short: "5 min",
     from: "scheduler",
     to: "app",
     label: "Every 5 minutes",

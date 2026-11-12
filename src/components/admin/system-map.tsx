@@ -192,7 +192,7 @@ function Diagram({
       sourceHandle,
       targetHandle,
       type: "smoothstep",
-      label: c.label,
+      label: c.short ?? c.label,
       animated: s === "ok",
       ariaLabel: `${c.label}: ${STATUS_LABEL[s]}`,
       style: {
@@ -228,7 +228,6 @@ function Diagram({
         zoomOnPinch={false}
         zoomOnDoubleClick={false}
         preventScrolling={false}
-        proOptions={{ hideAttribution: true }}
         onNodeClick={(_, n) => onSelect({ kind: "part", id: n.id as ComponentId })}
         onEdgeClick={(_, e) => onSelect({ kind: "link", id: e.id })}
         onPaneClick={() => onSelect(null)}

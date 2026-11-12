@@ -91,6 +91,7 @@ const ADVICE: Partial<Record<ComponentId, (r: ComponentResult) => string[]>> = {
     "Open the Supabase dashboard and check the project isn't paused.",
     "If the service role key was changed, update SUPABASE_SERVICE_ROLE_KEY in Vercel and redeploy.",
     "If the free 1 GB is nearly full, download a backup and empty the Trash.",
+    'If only "Opening a file with the link" fails and staff can still open files, the internet connection where the app runs was slow at that moment: press Check now again in a minute.',
   ],
   gate: () => [
     "Open the site in a private window. If it doesn't load, check status.vercel.com and your Vercel project's latest deployment.",

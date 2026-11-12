@@ -245,6 +245,16 @@ export default async function SystemPage() {
               <p className="mt-1 text-muted-foreground">
                 CRON_SECRET in Vercel: {e.CRON_SECRET ? "set" : "missing, add it first"}.
               </p>
+              {/^https?:\/\/(localhost|127\.|192\.168\.|10\.)/.test(origin) ? (
+                <p className="mt-1 text-warning">
+                  This is your computer&apos;s address, which cron-job.org can&apos;t reach. Open
+                  this page on your live Vercel site and use the address shown there.
+                </p>
+              ) : null}
+              <p className="mt-1 text-muted-foreground">
+                Opening the address in a browser shows &quot;Unauthorized&quot;. That&apos;s
+                expected: only cron-job.org has the secret.
+              </p>
             </div>
             <div>
               <p className="font-medium">Redeploy button (optional)</p>

@@ -81,6 +81,9 @@ test("the System Map shows every part, its checks and its connections", async ({
   const bell = page.getByTestId("system-bell");
   await expect(bell).toBeVisible();
   await bell.click();
+  const panel = page.getByTestId("system-bell-panel");
+  await expect(panel).toBeVisible();
+  await panel.getByRole("link", { name: "Open the System Map" }).click();
   await expect(page).toHaveURL(/\/admin\/system$/);
 });
 
@@ -121,6 +124,11 @@ test("a broken part opens a problem, alerts the admin, and Diagnose & Fix fixes 
     await page.goto("/admin/certificates");
     await expect(page.getByTestId("problem-banner")).toContainText("File storage");
     await expect(page.getByTestId("system-bell")).toHaveAccessibleName(/1 part not working/);
+    await page.getByTestId("system-bell").click();
+    await expect(page.getByTestId("system-bell-panel")).toContainText(
+      "File storage is not working",
+    );
+    await page.keyboard.press("Escape");
 
     // Diagnose & Fix tries the safe fixes and checks again
     await page.getByTestId("problem-banner").getByRole("link").click();

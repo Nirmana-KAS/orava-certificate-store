@@ -19,7 +19,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "CRON_SECRET is not set" }, { status: 503, headers });
   }
   if (!cronAuthorized(request.headers)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers });
+    // Opening this address in a browser lands here: it is only for cron-job.org
+    return NextResponse.json(
+      {
+        error: "Unauthorized",
+        note: "This address is for cron-job.org, which sends the x-cron-secret header. Opening it in a browser always shows this. To check the system yourself, open the System Map in the admin area.",
+      },
+      { status: 401, headers },
+    );
   }
   const run = await checkAndRecord("cron", siteOrigin(request.headers));
   return NextResponse.json({ overall: run.overall, ms: run.ms }, { headers });
