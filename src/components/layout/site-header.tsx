@@ -1,14 +1,17 @@
-import { LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 import { SubmitButton } from "@/components/forms/submit-button";
 import { signOutAction } from "@/lib/auth/actions";
+import { openIncidents } from "@/lib/server/health";
 import { getSession, homeFor } from "@/lib/server/session";
 import { site } from "@/lib/site";
 
 export async function SiteHeader() {
   const session = await getSession();
+  const problems =
+    session?.user.role === "admin" ? (await openIncidents().catch(() => [])).length : 0;
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
@@ -39,6 +42,28 @@ export async function SiteHeader() {
             >
               {session.user.email}
             </span>
+            {session.user.role === "admin" ? (
+              <Link
+                href="/admin/system"
+                className="relative inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                aria-label={
+                  problems
+                    ? `System map: ${problems} part${problems === 1 ? "" : "s"} not working`
+                    : "System map: everything works"
+                }
+                data-testid="system-bell"
+              >
+                <Bell className="size-5" aria-hidden="true" />
+                {problems ? (
+                  <span
+                    className="absolute top-1.5 right-1.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] leading-4 font-bold text-white"
+                    aria-hidden="true"
+                  >
+                    {problems}
+                  </span>
+                ) : null}
+              </Link>
+            ) : null}
             <form action={signOutAction}>
               <SubmitButton variant="ghost" size="sm" aria-label="Sign out">
                 <LogOut aria-hidden="true" />

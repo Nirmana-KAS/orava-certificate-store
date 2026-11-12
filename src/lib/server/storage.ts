@@ -74,8 +74,8 @@ const bucketSettings = {
 let bucketReady = false;
 
 /** Creates the private bucket on first use, and makes it private again if someone changed it. */
-export async function ensureBucket(): Promise<void> {
-  if (bucketReady) return;
+export async function ensureBucket(force = false): Promise<void> {
+  if (bucketReady && !force) return;
   try {
     const res = await call("GET", `/bucket/${BUCKET}`);
     const bucket = (await res.json()) as { public?: boolean; file_size_limit?: number | null };

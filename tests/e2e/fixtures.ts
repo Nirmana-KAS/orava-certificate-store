@@ -18,6 +18,7 @@ export const E2E = {
   disabled: { email: "former@example.com" },
   passkey: "Shared-Passkey-2026",
   mailFile: join(import.meta.dirname, "..", "..", "test-results", "mail.jsonl"),
+  healthFailFile: join(import.meta.dirname, "..", "..", "test-results", "health-fail.txt"),
   authDir: join(import.meta.dirname, "..", "..", "test-results", ".auth"),
 } as const;
 
@@ -35,4 +36,7 @@ export const appEnv = {
   SUPABASE_SERVICE_ROLE_KEY: E2E.storageKey,
   CRON_SECRET: "e2e-cron-secret-0123456789",
   REVERSE_GEOCODE: "off",
+  // The System Map test makes a part look broken by writing its name to this file
+  HEALTH_TEST_HOOKS: "on",
+  HEALTH_TEST_FAIL_FILE: E2E.healthFailFile,
 };

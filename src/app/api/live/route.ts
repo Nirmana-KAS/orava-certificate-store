@@ -32,7 +32,10 @@ export async function GET() {
       (select max(updated_at)::text from certificate_types),
       (select max(updated_at)::text from labs),
       (select concat_ws(',', count(*), max(updated_at), max(last_login_at)) from app_users),
-      (select updated_at::text from app_settings where id = true)
+      (select updated_at::text from app_settings where id = true),
+      -- Admins also see the System Map's problems (banner and bell)
+      (select string_agg(component, ',' order by component) from incidents
+         where status = 'open' and ${session.user.role === "admin"})
     ) as v
   `;
   const version = createHash("sha256")

@@ -2,6 +2,7 @@ import "server-only";
 
 import { appendFile } from "node:fs/promises";
 
+import { db } from "./db";
 import { env, isProduction } from "./env";
 
 export type Mail = { to: string; subject: string; text: string; html?: string };
@@ -23,6 +24,25 @@ function from(): string {
  * Without either, development prints the email to the server console.
  */
 export async function sendMail(mail: Mail): Promise<void> {
+  try {
+    await deliver(mail);
+  } catch (error) {
+    await logMail(false, (error as Error).message);
+    throw error;
+  }
+  await logMail(true);
+}
+
+/** Counts each email for the System Map (daily limit, failures). No address or content. */
+async function logMail(ok: boolean, error?: string): Promise<void> {
+  try {
+    await db()`insert into mail_log (ok, error) values (${ok}, ${error?.slice(0, 300) ?? null})`;
+  } catch {
+    // never let counting break sending
+  }
+}
+
+async function deliver(mail: Mail): Promise<void> {
   const e = env();
 
   if (e.MAIL_FILE) {

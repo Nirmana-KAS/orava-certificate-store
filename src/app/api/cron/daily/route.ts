@@ -1,11 +1,11 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { audit } from "@/lib/server/audit";
 import { backupDue, backupSummary } from "@/lib/server/backup";
 import { db } from "@/lib/server/db";
+import { cronAuthorized } from "@/lib/server/cron-auth";
 import { env } from "@/lib/server/env";
+import { recordDailyRun } from "@/lib/server/health";
 import { sendMail } from "@/lib/server/mail";
 import { getSettings } from "@/lib/server/settings";
 import { clientInfo } from "@/lib/server/request";
@@ -17,22 +17,6 @@ export const maxDuration = 60;
 
 const headers = { "Cache-Control": "private, no-store" };
 
-const same = (a: string, b: string) => {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-};
-
-/** Vercel Cron sends "Authorization: Bearer <secret>"; cron-job.org can send x-cron-secret. */
-function authorized(request: NextRequest): boolean {
-  const secret = env().CRON_SECRET;
-  if (!secret) return false;
-  return (
-    same(request.headers.get("authorization") ?? "", `Bearer ${secret}`) ||
-    same(request.headers.get("x-cron-secret") ?? "", secret)
-  );
-}
-
 /**
  * Once a day (Vercel Cron, 03:00 Sri Lanka time): erases what has been in the Trash for 30
  * days, and emails a backup reminder as often as the admin chose on the Backup page.
@@ -41,7 +25,7 @@ export async function GET(request: NextRequest) {
   if (!env().CRON_SECRET) {
     return NextResponse.json({ error: "CRON_SECRET is not set" }, { status: 503, headers });
   }
-  if (!authorized(request))
+  if (!cronAuthorized(request.headers))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers });
   const client = await clientInfo();
 
@@ -111,6 +95,9 @@ export async function GET(request: NextRequest) {
       }
     }
   }
+
+  // The System Map's "Scheduled checks" part shows when this last ran
+  await recordDailyRun().catch((e) => console.error("daily run not recorded", e));
 
   return NextResponse.json(
     { ok: !trashError, erased, backupDue: due, reminded, error: trashError },

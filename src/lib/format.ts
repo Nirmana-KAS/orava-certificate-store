@@ -104,6 +104,10 @@ const actionLabels: Record<string, string> = {
   "backup.export": "Started a backup download",
   "backup.complete": "Finished a backup download",
   "backup.reminder": "Sent a backup reminder",
+  "system.check": "Checked the system",
+  "system.diagnose": "Ran Diagnose & Fix",
+  "system.report": "Downloaded a Diagnose & Fix report",
+  "system.redeploy": "Started a redeploy",
   "activity.export": "Downloaded the activity log",
 };
 

@@ -34,6 +34,15 @@ const schema = z.object({
   // Turns a shared device location into a street address with OpenStreetMap's free Nominatim
   // service (on unless set to "off"; the tests turn it off)
   REVERSE_GEOCODE: z.enum(["on", "off"]).optional(),
+  // Optional: a Vercel Deploy Hook (Project → Settings → Git → Deploy Hooks), so the System Map
+  // can start a fresh deployment with one button
+  DEPLOY_HOOK_URL: z
+    .url()
+    .refine(
+      (u) => u.startsWith("https://api.vercel.com/"),
+      "DEPLOY_HOOK_URL must be a Vercel Deploy Hook",
+    )
+    .optional(),
   // Test-only: write emails to a JSON file instead of sending (refused on Vercel)
   MAIL_FILE: z.string().optional(),
 });

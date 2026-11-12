@@ -7,6 +7,7 @@ import {
   FileStack,
   History,
   LayoutDashboard,
+  Network,
   Settings,
   Shapes,
   Trash2,
@@ -33,6 +34,7 @@ const more: Item[] = [
   { href: "/admin/trash", label: "Trash", icon: Trash2 },
   { href: "/admin/activity", label: "Activity log", icon: History },
   { href: "/admin/backup", label: "Backup", icon: Archive },
+  { href: "/admin/system", label: "System map", icon: Network },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 const sidebar = [main[0]!, main[1]!, main[2]!, more[0]!, main[3]!, ...more.slice(1)];
