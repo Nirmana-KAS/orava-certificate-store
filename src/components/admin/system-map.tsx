@@ -178,7 +178,8 @@ function LabelledEdge(props: EdgeProps<Edge<LineData>>) {
   });
   const turnX = data?.trunk === undefined ? (sourceX + targetX) / 2 : sourceX + data.trunk;
   const at = data?.labelAt ?? "center";
-  const x = at === "target" ? (turnX + targetX) / 2 : at === "source" ? (sourceX + targetX) / 2 : cx;
+  const x =
+    at === "target" ? (turnX + targetX) / 2 : at === "source" ? (sourceX + targetX) / 2 : cx;
   const y = at === "target" ? targetY : at === "source" ? sourceY : cy;
   return (
     <>

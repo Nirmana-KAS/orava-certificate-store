@@ -30,6 +30,8 @@ export const pages: Page[] = [
   { name: "admin-sign-in-sessions", path: "/admin/activity/sessions", as: "admin" },
   { name: "admin-backup", path: "/admin/backup", as: "admin" },
   { name: "admin-system-map", path: "/admin/system", as: "admin" },
+  // Before the Control passkey is set (the open page is checked in control.spec.ts)
+  { name: "admin-control-center", path: "/admin/control", as: "admin" },
 ];
 
 export function storageFor(as: Page["as"]): string | undefined {

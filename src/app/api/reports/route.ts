@@ -14,6 +14,7 @@ import { canMakeReports, makeReport } from "@/lib/server/reports";
 import { clientInfo } from "@/lib/server/request";
 import { filterOptions } from "@/lib/server/search";
 import { getSession } from "@/lib/server/session";
+import { switchBlock, whoOf } from "@/lib/server/switches";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,15 @@ export async function GET(request: NextRequest) {
     return new NextResponse("You don't have permission to make reports.", {
       status: 403,
       headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+  const paused =
+    (await switchBlock("search", whoOf(session))) ??
+    (await switchBlock("download", whoOf(session)));
+  if (paused) {
+    return new NextResponse(paused.message, {
+      status: 503,
+      headers: { "Cache-Control": "private, no-store", "Retry-After": "300" },
     });
   }
   const params = Object.fromEntries(request.nextUrl.searchParams.entries());

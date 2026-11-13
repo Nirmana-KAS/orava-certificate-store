@@ -4,8 +4,11 @@ import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
+import { SwitchNotice } from "@/components/layout/switch-notice";
+import { UpcomingNote } from "@/components/layout/switch-banner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSession, homeFor } from "@/lib/server/session";
+import { switchBlock } from "@/lib/server/switches";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -15,6 +18,8 @@ export const metadata: Metadata = {
 export default async function SignInPage() {
   const session = await getSession();
   if (session) redirect(homeFor(session.user.role));
+  // The Control Center's status note: staff see a hold before they try to sign in
+  const paused = (await switchBlock("public", null)) ?? (await switchBlock("signin", null));
 
   return (
     <div className="mx-auto grid w-full max-w-7xl flex-1 items-center gap-10 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-2 lg:gap-16 lg:px-8">
@@ -35,17 +40,22 @@ export default async function SignInPage() {
         </p>
       </section>
 
-      <div className="w-full max-w-md justify-self-center lg:justify-self-end">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>Use your company email and the shared passkey.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SignInForm />
-          </CardContent>
-        </Card>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
+      <div className="grid w-full max-w-md gap-4 justify-self-center lg:justify-self-end">
+        <UpcomingNote />
+        {paused ? (
+          <SwitchNotice block={paused} what="Sign-in" compact />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Sign in</CardTitle>
+              <CardDescription>Use your company email and the shared passkey.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SignInForm />
+            </CardContent>
+          </Card>
+        )}
+        <p className="text-center text-sm text-muted-foreground">
           Administrator?{" "}
           <Link
             href="/admin/login"

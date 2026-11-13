@@ -48,6 +48,18 @@ pnpm dev
 - **Backup** (`/admin/backup`): one zip with every database table (JSON) and every file, made in the admin's browser. Download one weekly; the free database has no automatic backups.
 - **Daily job**: Vercel Cron calls `/api/cron/daily` (see `vercel.json`) to empty old Trash and email a backup reminder. Set `CRON_SECRET` (16+ random characters) in Vercel's environment variables.
 
+## 🎛️ Control Center
+
+`/admin/control` switches the whole staff side, or one part of it, off and on by hand. The admin dashboard is never switched off.
+
+- **Control passkey**: a second passkey (Argon2id) that opens the page for 10 minutes. 3 wrong tries email a rescue link; 5 lock the page for 15 minutes.
+- **States**: On, Read-only (search and view only), Hold (a friendly "back soon" message, sign-ins stay) and Down (off; Down on Sign-in signs every staff member out).
+- **Parts**: Sign-in, Public pages, Database, File storage, Search, Certificate view, Downloads, Uploads, Extraction, Email and Health checks, plus selected people, a group or one certificate type.
+- **Safety**: Down and whole-system changes need the passkey again plus `CONFIRM`; every switch can be undone for 5 seconds, is logged with a reason (CSV download) and is emailed to the admin.
+- **Timers and schedules**: "back on at" times and maintenance windows (once, daily or weekly, Sri Lanka time), with a staff warning 15 minutes before.
+- **Rescue link**: a single-use, 15-minute email link that turns everything back on and asks for a new Control passkey.
+- Switch states are read through a 10-second cache on each server, and the cron-job.org health check also applies timers and schedules when nobody is using the app.
+
 ## 🗺️ Roadmap
 
 <img src="docs/images/roadmap.svg" alt="Roadmap" width="100%"/>

@@ -16,13 +16,14 @@ import { decrypt, encrypt, safeEqual } from "@/lib/server/crypto";
 import { db } from "@/lib/server/db";
 import { isTrustedDevice, trustThisDevice } from "@/lib/server/devices";
 import { env } from "@/lib/server/env";
-import { sendMail } from "@/lib/server/mail";
+import { EmailSwitchedOff, sendMail } from "@/lib/server/mail";
 import { hashSecret, verifySecret } from "@/lib/server/password";
 import { minutesText } from "@/lib/server/rate-limit-policy";
 import { checkLimit, isIpBlocked, recordAttempt } from "@/lib/server/rate-limit";
 import { clientInfo, type ClientInfo } from "@/lib/server/request";
 import { createSession, endCurrentSession } from "@/lib/server/session";
 import { getSettings } from "@/lib/server/settings";
+import { switchBlock } from "@/lib/server/switches";
 import { checkTotp } from "@/lib/server/totp";
 import { site } from "@/lib/site";
 import {
@@ -75,11 +76,15 @@ export async function signInAction(_prev: FormState, formData: FormData): Promis
 
   const settings = await getSettings();
   if (settings.lockdown) return { error: "Sign-in is paused by the admin right now.", values };
+  const paused = (await switchBlock("public", null)) ?? (await switchBlock("signin", null));
+  if (paused) return { error: paused.message, values };
   if (!settings.passkeySet)
     return { error: "Sign-in isn't set up yet. Please contact the admin.", values };
 
-  const [user] = await db()<{ id: string; email: string; role: string; status: string }[]>`
-    select id, email, role, status from app_users where email = ${email}
+  const [user] = await db()<
+    { id: string; email: string; role: string; status: string; can_upload: boolean }[]
+  >`
+    select id, email, role, status, can_upload from app_users where email = ${email}
   `;
   const passkeyOk = await verifySecret(settings.passkeyHash, passkey);
 
@@ -92,10 +97,19 @@ export async function signInAction(_prev: FormState, formData: FormData): Promis
   }
   await recordAttempt(client, email, "passkey", true);
 
+  // This person or their group switched to Hold or Down in the Control Center
+  const personal = await switchBlock("signin", {
+    role: "viewer",
+    id: user.id,
+    canUpload: user.can_upload,
+  });
+  if (personal && personal.state !== "readonly") return { error: personal.message, values };
+
   if (settings.requireDeviceCode && !(await isTrustedDevice(user.id))) {
     const { code } = await startChallenge(user.id, "email_code", client);
     try {
       await sendMail({
+        staff: true,
         to: user.email,
         subject: `${code} is your ${site.name} code`,
         text: [
@@ -107,6 +121,13 @@ export async function signInAction(_prev: FormState, formData: FormData): Promis
         ].join("\n"),
       });
     } catch (error) {
+      if (error instanceof EmailSwitchedOff) {
+        return {
+          error:
+            "Sign-in codes can't be emailed right now. Try again later, or from a device you used before.",
+          values,
+        };
+      }
       console.error("sign-in code email failed", error);
       await securityEvent("email_send_failed", "medium", client, email);
       return { error: "We couldn't send your sign-in code. Please try again shortly.", values };
@@ -151,6 +172,8 @@ export async function verifyCodeAction(_prev: FormState, formData: FormData): Pr
   if (challenge.user.status !== "active" || challenge.user.role !== "viewer" || settings.lockdown) {
     return { error: WRONG_PASSKEY };
   }
+  const paused = (await switchBlock("public", null)) ?? (await switchBlock("signin", null));
+  if (paused) return { error: paused.message };
   if (formData.get("remember") === "on") await trustThisDevice(challenge.user.id, client);
   await createSession(
     { id: challenge.user.id, email: challenge.user.email, role: "viewer" },

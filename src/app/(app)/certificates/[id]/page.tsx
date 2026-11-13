@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { CertificateView } from "@/components/certificates/certificate-view";
+import { SwitchNoticePage } from "@/components/layout/switch-notice";
 import { audit } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { clientInfo } from "@/lib/server/request";
 import { requireUser } from "@/lib/server/session";
+import { switchBlock, whoOf } from "@/lib/server/switches";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -39,13 +41,22 @@ export default async function CertificatePage({ params }: { params: Promise<{ id
   const { user } = session;
   const { id } = await params;
   if (user.role === "admin") redirect(`/admin/certificates/${id}`);
+  const [cert] = UUID.test(id)
+    ? await db()<{ type_id: string }[]>`select type_id from certificates where id = ${id}`
+    : [];
+  const who = whoOf(session);
+  const [paused, noDownloads] = await Promise.all([
+    switchBlock("view", who, cert?.type_id),
+    switchBlock("download", who, cert?.type_id),
+  ]);
+  if (paused) return <SwitchNoticePage block={paused} what="This certificate" />;
   await logView(session, id);
   return (
     <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
       <CertificateView
         id={id}
         backHref="/certificates"
-        canDownload={user.canDownload}
+        canDownload={user.canDownload && !noDownloads}
         editHref={user.canUpload ? `/upload/certificates/${id}` : undefined}
       />
     </div>

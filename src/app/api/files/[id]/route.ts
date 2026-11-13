@@ -6,6 +6,7 @@ import { audit } from "@/lib/server/audit";
 import { db } from "@/lib/server/db";
 import { clientInfo } from "@/lib/server/request";
 import { getSession, inUploadMode } from "@/lib/server/session";
+import { switchBlock, whoOf } from "@/lib/server/switches";
 import { signedDownloadUrl } from "@/lib/server/storage";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +41,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       original_name: string;
       title: string;
       certificate_id: string;
+      type_id: string;
     }[]
   >`
-    select f.storage_path, f.original_name, c.title, c.id as certificate_id
+    select f.storage_path, f.original_name, c.title, c.id as certificate_id, c.type_id
     from certificate_files f join certificates c on c.id = f.certificate_id
     where f.id = ${id} and f.status = 'ready'
       -- certificates in the Trash, and earlier versions kept after a Replace, can still be
@@ -50,6 +52,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       and (c.deleted_at is null or ${isAdmin})
   `;
   if (!file) return notFound();
+
+  // Switched off in the Control Center (the admin is never stopped here)
+  const paused = await switchBlock(download ? "download" : "view", whoOf(session), file.type_id);
+  if (paused) {
+    return new NextResponse(paused.message, {
+      status: 503,
+      headers: { ...noStore, "Retry-After": "300", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
 
   // Saved as ReportNo_Date_Lab.pdf, the name it is stored under
   const name = baseNameOf(file.storage_path);

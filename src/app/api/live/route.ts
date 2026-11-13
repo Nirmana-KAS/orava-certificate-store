@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/server/db";
 import { getSession } from "@/lib/server/session";
+import { switchesFingerprint } from "@/lib/server/switches";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,11 @@ export async function GET() {
          where status = 'open' and ${session.user.role === "admin"})
     ) as v
   `;
+  // Control Center switches, timers and maintenance windows: a page that was switched off
+  // comes back by itself, and an open Control Center on another device stays in sync
+  const switches = await switchesFingerprint();
   const version = createHash("sha256")
-    .update(row?.v ?? "")
+    .update(`${row?.v ?? ""}|${switches}`)
     .digest("base64url")
     .slice(0, 16);
   return NextResponse.json({ signedIn: true, version }, { headers: noStore });

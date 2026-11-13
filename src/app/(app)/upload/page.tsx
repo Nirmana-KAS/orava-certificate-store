@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CertificateSearch } from "@/components/certificates/certificate-search";
 import { UnlockUploadForm } from "@/components/upload/unlock-form";
 import { UploadNav } from "@/components/upload/upload-nav";
+import { SwitchNotice } from "@/components/layout/switch-notice";
 import { parseFilters } from "@/lib/certificates/filters";
 import { formatTime } from "@/lib/format";
 import {
@@ -19,6 +20,7 @@ import {
   requireUploadModePage,
   UPLOAD_MODE_MINUTES,
 } from "@/lib/server/session";
+import { switchBlock, whoOf } from "@/lib/server/switches";
 import { lockUploadAction } from "@/lib/upload/actions";
 
 export const metadata: Metadata = { title: "Upload mode" };
@@ -32,6 +34,17 @@ export default async function UploadHome({
   if (!session) redirect("/");
   if (session.user.role === "admin") redirect("/admin/certificates");
   if (!session.user.canUpload) redirect("/certificates");
+
+  // Uploads switched off in the Control Center: the page says so instead of the upload tools
+  const paused = await switchBlock("upload", whoOf(session));
+  if (paused) {
+    return (
+      <>
+        <PageHeader title="Upload mode" />
+        <SwitchNotice block={paused} what="Uploads" />
+      </>
+    );
+  }
 
   if (!inUploadMode(session)) {
     return (

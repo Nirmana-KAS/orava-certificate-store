@@ -94,6 +94,21 @@ export const otherBrowserProjects: Project[] = [
   other("firefox-desktop", { ...devices["Desktop Firefox"] }),
 ];
 
+/**
+ * The Control Center switches parts of the app off for everyone, so it runs alone, after
+ * every other project has finished.
+ */
+export const controlProject: Project = {
+  name: "control-flows",
+  testMatch: /control\.spec\.ts/,
+  dependencies: [
+    "auth-flows",
+    ...chromiumProjects.map((p) => p.name!),
+    ...adminFlowProjects.map((p) => p.name!),
+  ],
+  use: { ...devices["Desktop Chrome"], launchOptions },
+};
+
 export const baseProjects = [setupProject, flowProject];
 
 export default defineConfig({
@@ -107,7 +122,7 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
   },
-  projects: [...baseProjects, ...chromiumProjects, ...adminFlowProjects],
+  projects: [...baseProjects, ...chromiumProjects, ...adminFlowProjects, controlProject],
   // Local Postgres (PGlite) with test accounts, a stand-in for Supabase Storage, then the
   // production build of the app.
   // Run `pnpm build` first.

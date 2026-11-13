@@ -3,6 +3,13 @@ import "server-only";
 import { PAGE_SIZE, type Filters, type SortKey } from "@/lib/certificates/filters";
 
 import { db } from "./db";
+import { getSession } from "./session";
+import { hiddenTypeIds, whoOf } from "./switches";
+
+/** Types the Control Center has on Hold or Down for this person (none for the admin). */
+async function hidden(): Promise<string[]> {
+  return hiddenTypeIds(whoOf(await getSession()));
+}
 
 export type SearchRow = {
   id: string;
@@ -63,6 +70,7 @@ export async function searchCertificates(
   opts: { limit?: number } = {},
 ): Promise<{ rows: SearchRow[]; total: number }> {
   const sql = db();
+  const hide = await hidden();
   const words = (f.q ?? "").split(/\s+/).filter(Boolean).slice(0, 8);
 
   // Every word must appear somewhere: in the main fields, the type values or the text read
@@ -103,6 +111,7 @@ export async function searchCertificates(
     join certificate_types t on t.id = c.type_id
     left join labs l on l.id = t.lab_id
     where c.deleted_at is null
+      ${hide.length ? sql`and c.type_id::text <> all(${hide}::text[])` : sql``}
       ${f.lab ? sql`and t.lab_id = ${f.lab}` : sql``}
       ${f.type ? sql`and c.type_id = ${f.type}` : sql``}
       ${f.category ? sql`and t.category = ${f.category}` : sql``}
@@ -138,12 +147,15 @@ export type FilterOptions = {
 /** The choices for the filter lists: only values that some certificate actually has. */
 export async function filterOptions(): Promise<FilterOptions> {
   const sql = db();
+  const hide = await hidden();
   const [labs, types, gems, origins] = await Promise.all([
     sql<{ id: string; name: string }[]>`
       select id, short_name as name from labs where not archived order by sort_order, short_name
     `,
     sql<{ id: string; name: string }[]>`
-      select id, name from certificate_types where not archived order by sort_order, name
+      select id, name from certificate_types where not archived
+        ${hide.length ? sql`and id::text <> all(${hide}::text[])` : sql``}
+      order by sort_order, name
     `,
     sql<{ v: string }[]>`
       select min(identification) as v from certificates

@@ -10,6 +10,7 @@ import {
   Network,
   Settings,
   Shapes,
+  SlidersHorizontal,
   Trash2,
   Users,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const more: Item[] = [
   { href: "/admin/activity", label: "Activity log", icon: History },
   { href: "/admin/backup", label: "Backup", icon: Archive },
   { href: "/admin/system", label: "System map", icon: Network },
+  { href: "/admin/control", label: "Control Center", icon: SlidersHorizontal },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 const sidebar = [main[0]!, main[1]!, main[2]!, more[0]!, main[3]!, ...more.slice(1)];

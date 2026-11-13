@@ -5,7 +5,21 @@ import { appendFile } from "node:fs/promises";
 import { db } from "./db";
 import { env, isProduction } from "./env";
 
-export type Mail = { to: string; subject: string; text: string; html?: string };
+export type Mail = {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  /** An email to a staff member (not the admin): stopped while the Email switch is off */
+  staff?: boolean;
+};
+
+/** Thrown when the Control Center has the Email switch on Hold or Down. */
+export class EmailSwitchedOff extends Error {
+  constructor() {
+    super("Email to staff is switched off in the Control Center");
+  }
+}
 
 function from(): string {
   const e = env();
@@ -23,7 +37,12 @@ function from(): string {
  * 2. Resend: 100 a day, but only to your own address until you verify a domain.
  * Without either, development prints the email to the server console.
  */
-export async function sendMail(mail: Mail): Promise<void> {
+export async function sendMail({ staff, ...mail }: Mail): Promise<void> {
+  if (staff) {
+    // Imported here: the switches module itself sends admin alerts through this file
+    const { switchBlock } = await import("./switches");
+    if (await switchBlock("email", null)) throw new EmailSwitchedOff();
+  }
   try {
     await deliver(mail);
   } catch (error) {

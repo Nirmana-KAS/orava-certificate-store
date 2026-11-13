@@ -3,9 +3,11 @@ import Link from "next/link";
 import { Check, FileBarChart, Minus, Upload } from "lucide-react";
 
 import { CertificateSearch } from "@/components/certificates/certificate-search";
+import { SwitchNoticePage } from "@/components/layout/switch-notice";
 import { Button } from "@/components/ui/button";
 import { parseFilters } from "@/lib/certificates/filters";
 import { inUploadMode, requireUser } from "@/lib/server/session";
+import { switchBlock, whoOf } from "@/lib/server/switches";
 
 export const metadata: Metadata = { title: "Certificates" };
 
@@ -18,10 +20,15 @@ export default async function CertificatesPage({
   const { user } = session;
   const isAdmin = user.role === "admin";
   const filters = parseFilters(await searchParams);
+  const [paused, noDownloads] = await Promise.all([
+    switchBlock("search", whoOf(session)),
+    switchBlock("download", whoOf(session)),
+  ]);
+  if (paused) return <SwitchNoticePage block={paused} what="Certificates" />;
 
   const access = [
     { on: true, label: "Search and open certificates" },
-    { on: isAdmin || user.canDownload, label: "Download files" },
+    { on: (isAdmin || user.canDownload) && !noDownloads, label: "Download files" },
     { on: isAdmin || user.canReport, label: "Make reports" },
     ...(user.canUpload ? [{ on: true, label: "Add and change certificates" }] : []),
   ];

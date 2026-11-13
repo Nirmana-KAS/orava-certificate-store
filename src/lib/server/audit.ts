@@ -26,14 +26,17 @@ async function sessionTokenHash(): Promise<string | null> {
 
 const SIGN_INS = ["sign_in", "admin.sign_in", "admin.setup"];
 
-/** Records who did what. Never throws: logging must not break the action itself. */
+/**
+ * Records who did what, and returns the entry's id (null if it couldn't be saved). Never
+ * throws: logging must not break the action itself.
+ */
 export async function audit(
   actor: Actor,
   action: string,
   client: ClientInfo,
   target?: string | null,
   meta: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<string | null> {
   try {
     const sql = db();
     const hash = actor?.sessionId ? null : await sessionTokenHash();
@@ -47,15 +50,18 @@ export async function audit(
         : hash
           ? sql`(select id from sessions where token_hash = ${hash})`
           : sql`null::uuid`;
-    await sql`
+    const [row] = await sql<{ id: string }[]>`
       insert into audit_logs (actor_id, actor_email, action, target, ip, user_agent, meta, client,
                               session_id)
       values (${actor?.id ?? null}, ${actor?.email ?? null}, ${action}, ${target ?? null},
               ${client.ip}, ${client.userAgent}, ${sql.json(meta as postgres.JSONValue)},
               ${sql.json((client.meta ?? {}) as postgres.JSONValue)}, ${session})
+      returning id::text
     `;
+    return row?.id ?? null;
   } catch (error) {
     console.error("audit log failed", error);
+    return null;
   }
 }
 

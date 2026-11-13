@@ -2,6 +2,7 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { ProblemBanner } from "@/components/admin/problem-banner";
 import { LiveUpdates } from "@/components/layout/live-updates";
 import { LocationCheck } from "@/components/layout/location-check";
+import { ControlBanner } from "@/components/layout/switch-banner";
 import { openIncidents } from "@/lib/server/health";
 import { requireAdmin } from "@/lib/server/session";
 import { COMPONENT_BY_ID } from "@/lib/system/map";
@@ -16,6 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <ProblemBanner
           parts={incidents.map((i) => COMPONENT_BY_ID[i.component]?.name ?? i.component)}
         />
+        <ControlBanner />
         {children}
       </div>
       <LiveUpdates signInPath="/admin/login" />

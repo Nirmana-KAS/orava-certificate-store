@@ -11,6 +11,7 @@ import { db } from "./db";
 import { env } from "./env";
 import type { ClientInfo } from "./request";
 import type { AppSettings } from "./settings";
+import { sessionSwitchedOff, switchBlock, whoOf } from "./switches";
 
 export type Role = "admin" | "viewer";
 
@@ -80,7 +81,8 @@ type Row = {
 
 /**
  * The signed-in user for this request, or null. A session stops working when it expires, is revoked,
- * the user is disabled, the shared passkey is rotated (staff only), or lockdown is on (staff only).
+ * the user is disabled, the shared passkey is rotated (staff only), lockdown is on (staff only),
+ * or the Control Center has Sign-in, everything or this person Down (staff only).
  */
 export const getSession = cache(async (): Promise<Session | null> => {
   const token = (await cookies()).get(COOKIES.session)?.value;
@@ -103,6 +105,13 @@ export const getSession = cache(async (): Promise<Session | null> => {
       and (s.role = 'admin' or (s.passkey_version = a.passkey_version and a.lockdown = false))
   `;
   if (!row) return null;
+  // Sign-in (or everything, or this person) switched Down in the Control Center
+  if (
+    row.role === "viewer" &&
+    (await sessionSwitchedOff({ role: row.role, id: row.id, canUpload: row.can_upload }))
+  ) {
+    return null;
+  }
 
   if (Date.now() - row.last_seen_at.getTime() > 5 * 60 * 1000) {
     await db()`update sessions set last_seen_at = now() where id = ${row.session_id}`;
@@ -161,6 +170,10 @@ export const certificatesBase = (area: EditorArea) =>
 export async function requireEditor(): Promise<Session & { area: EditorArea }> {
   const session = await getSession();
   if (!session) redirect("/");
+  // Uploads switched off in the Control Center: the upload pages explain it
+  if (await switchBlock("upload", whoOf(session))) {
+    redirect(session.user.role === "admin" ? "/admin/certificates/new" : "/upload");
+  }
   if (session.user.role === "admin") return { ...session, area: "admin" };
   if (!session.user.canUpload) redirect("/certificates");
   if (!inUploadMode(session)) redirect("/upload");

@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { CodeForm } from "@/components/auth/code-form";
+import { SwitchNoticePage } from "@/components/layout/switch-notice";
 import { verifyCodeAction } from "@/lib/auth/actions";
 import { pendingChallenge } from "@/lib/server/challenges";
+import { switchBlock } from "@/lib/server/switches";
 
 export const metadata: Metadata = { title: "Check your email" };
 
@@ -17,6 +19,8 @@ function mask(email: string): string {
 export default async function VerifyPage() {
   const challenge = await pendingChallenge();
   if (!challenge || challenge.kind !== "email_code") redirect("/");
+  const paused = (await switchBlock("public", null)) ?? (await switchBlock("signin", null));
+  if (paused) return <SwitchNoticePage block={paused} what="Sign-in" />;
 
   return (
     <AuthCard
