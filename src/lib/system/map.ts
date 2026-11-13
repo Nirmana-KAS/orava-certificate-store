@@ -43,7 +43,7 @@ export type Component = {
   about: string;
   /** Parts it can't work without: when one of them fails, this part is "affected" */
   needs: ComponentId[];
-  /** Where it sits on the diagram (column, row) */
+  /** Where it sits on the diagram (column, row; halves allowed) */
   at: [number, number];
 };
 
@@ -146,7 +146,7 @@ export type Connection = {
   from: ComponentId;
   to: ComponentId;
   label: string;
-  /** A shorter label for the diagram, where lines between boxes are short */
+  /** A shorter label for the diagram, when the full one is too long for the gap */
   short?: string;
   /** What flows through it, in plain words */
   about: string;
@@ -166,10 +166,10 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "gate-app",
-    short: "Requests",
     from: "gate",
     to: "app",
     label: "Checked requests",
+    short: "Requests",
     about:
       "Requests the gate let through, with security headers added. Signed-out visitors never get past the gate to private pages.",
     sample: "GET /certificates → 200, Content-Security-Policy: default-src 'self'; …",
@@ -194,7 +194,6 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "app-storage",
-    short: "Links",
     from: "app",
     to: "storage",
     label: "Signed links",
@@ -221,7 +220,6 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "browser-reader",
-    short: "Engine",
     from: "browser",
     to: "reader",
     label: "Reading files",
@@ -230,7 +228,6 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "app-geocoder",
-    short: "Lookup",
     from: "app",
     to: "geocoder",
     label: "Address lookup",
@@ -239,10 +236,10 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     id: "scheduler-app",
-    short: "5 min",
     from: "scheduler",
     to: "app",
     label: "Every 5 minutes",
+    short: "Every 5 min",
     about:
       "cron-job.org calls the health check with a secret; Vercel Cron calls the daily job at 03:00.",
     sample: "GET /api/health/check\nx-cron-secret: •••••• (hidden)",
